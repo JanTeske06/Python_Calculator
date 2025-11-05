@@ -14,12 +14,12 @@ def boolean(section, value):
     else:
         return "-1"
 
-def load_settings(section, key_value):
+def load_setting(key_value):
     cfg_instance = configparser.ConfigParser()
     cfg_instance.read(config, encoding='utf-8')
 
 
-    if section == "all":
+    if key_value == "all":
         config_data = {
             "use_degrees": cfg_instance.get("Scientific_Options", "use_degrees"),
             "decimal_places": cfg_instance.get("Math_Options", "decimal_places"),
@@ -29,17 +29,24 @@ def load_settings(section, key_value):
             "show_equation": cfg_instance.get("UI", "show_equation"),
             "fractions": cfg_instance.get("UI", "fractions")
         }
-        print(json.dumps(config_data))
+        return json.loads(json.dumps(config_data))
 
     else:
         try:
+            if str(key_value) in ("darkmode","after_paste_enter","shift_to_copy","show_equation","fractions"):
+                section = "UI"
+            elif str(key_value) in ("decimal_places"):
+                section = "Math_Options"
+            elif str(key_value) in ("use_degrees"):
+                section = "Scientific_Options"
+
             return_value = cfg_instance.get(str(section), str(key_value))
-            print(return_value)
+            return json.loads(json.dumps(return_value))
         except (configparser.NoSectionError, configparser.NoOptionError, ValueError):
-            print("-1")
+            return -1
 
 
-def save_settings(key_value, new_value):
+def save_setting(key_value, new_value):
     config_file = configparser.ConfigParser()
     config_file.read(config, encoding='utf-8')
     success = False
@@ -86,12 +93,16 @@ def save_settings(key_value, new_value):
         try:
             with open(config, 'w', encoding='utf-8') as configfile:
                 config_file.write(configfile)
-            print("1")
+            #print("1")
+            return "1"
         except Exception as e:
-            print(f"FEHLER: Konnte {config} nicht speichern: {e}")
+            return (f"FEHLER: Konnte {config} nicht speichern: {e}")
+
+            #print(f"FEHLER: Konnte {config} nicht speichern: {e}")
 
     else:
-        print("-1")
+        return "-1"
+        #print("-1")
 
 
 def main():
@@ -119,6 +130,34 @@ def main():
     else:
         print("Fehler. Es wurde kein gültiger Befehl übergeben.")
         sys.exit(1)
+
+
+# def main():
+#     test = 0
+#     if len(sys.argv) < 5 and test == 0:
+#         print("Fehler. Es wurden nicht genügend Argumente übergeben.")
+#         sys.exit(1)
+#     else:
+#         #
+#         befehl = sys.argv[1]
+#         section = sys.argv[2]
+#         key_value = sys.argv[3]
+#         new_value = sys.argv[4]
+#         # befehl = "save"
+#         # section = "UI"
+#         # key_value = "darkmode"
+#         # new_value = "False"
+#
+#     if befehl == "save":
+#         save_settings(str(key_value), str(new_value))
+#
+#     elif befehl == "load":
+#         load_settings(section, key_value)
+#
+#     else:
+#         print("Fehler. Es wurde kein gültiger Befehl übergeben.")
+#         sys.exit(1)
+
 
 
 if __name__ == "__main__":

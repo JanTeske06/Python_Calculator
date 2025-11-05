@@ -4,7 +4,6 @@ import math
 from PySide6 import QtWidgets
 from PySide6.QtCore import Qt
 import sys
-import subprocess
 import os
 from pathlib import Path
 import time
@@ -14,6 +13,13 @@ import configparser
 from decimal import Decimal
 import fractions
 import inspect
+import error as E  # Imports Error.py
+import json
+
+import config_manager as config_manager
+import ScientificEngine
+
+debug = 0
 
 rounding = False
 cas = False
@@ -23,56 +29,11 @@ global_subprocess = None
 python_interpreter = sys.executable
 Operations = ["+","-","*","/","=","^"]
 Science_Operations = ["sin","cos","tan","10^x","log","e^", "π", "√"]
-ScientificEngine = str(Path(__file__).resolve().parent / "ScientificEngine.py")
 config_man = str(Path(__file__).resolve().parent / "config_manager.py")
 config = Path(__file__).resolve().parent.parent / "config.ini"
 
 
 
-
-
-
-
-def Config_manager(action, section, key_value, new_value):
-    cmd = [
-        python_interpreter,
-        config_man,
-        action,
-        section,
-        key_value,
-        new_value
-    ]
-    try:
-        ergebnis = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            check=True)
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        return zurueckgeschickter_string
-    except subprocess.CalledProcessError as e:
-        print(f"3721 Ein Fehler ist aufgetreten: {e}") #3721
-
-
-def ScienceCalculator(problem):
-    cmd = [
-            python_interpreter,
-            ScientificEngine,
-            problem
-
-    ]
-    try:
-        ergebnis = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True)
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        return zurueckgeschickter_string
-    except subprocess.CalledProcessError as e:
-        print(f"3721 Ein Fehler ist aufgetreten: {e}") #3721
 
 
 def get_line_number():
@@ -244,9 +205,9 @@ class BinOp:
         return f"BinOp({self.operator!r}, left={self.left}, right={self.right})"
 
 
+
 def translator(problem):
-    global var_counter
-    global var_list
+    var_counter = 0
     var_list = [None] * len(problem)
     full_problem = []
     b = 0
@@ -324,7 +285,8 @@ def translator(problem):
 
 
         elif current_char == 'π':
-            ergebnis_string = ScienceCalculator('π')
+            ergebnis_string = ScientificEngine.isPi(str(current_char))
+
             try:
                 berechneter_wert = Decimal(ergebnis_string)
                 full_problem.append(berechneter_wert)
@@ -374,12 +336,15 @@ def translator(problem):
 
         b += 1
 
-    return full_problem
+
+
+    return full_problem, var_counter
 
 
 def ast(received_string):
-    global cas
-    analysed = translator(received_string)
+
+    analysed, var_counter = translator(received_string)
+
     if analysed and analysed[0] == "=" and not "var0" in analysed:
         analysed.pop(0)
         if global_subprocess == "0":
@@ -411,8 +376,7 @@ def ast(received_string):
         elif token in Science_Operations:
 
             if token == 'π':
-                ScienceOp = 'π'
-                ergebnis = ScienceCalculator(ScienceOp)
+                ergebnis = ScientificEngine.isPi(token)
 
                 try:
                     berechneter_wert = Decimal(ergebnis)
@@ -440,7 +404,7 @@ def ast(received_string):
 
                     argument_wert = argument_baum.evaluate()
                     ScienceOp = f"{token}({argument_wert})"
-                ergebnis_string = ScienceCalculator(ScienceOp)
+                ergebnis_string = ScientificEngine.unknown_function(ScienceOp)
                 try:
                     berechneter_wert = float(ergebnis_string)
                     return Number(berechneter_wert)
@@ -535,7 +499,11 @@ def ast(received_string):
         print("Finaler AST:")
         print(finaler_baum)
 
-    return finaler_baum
+    cas = locals().get('cas', False)
+
+
+
+    return finaler_baum, cas, var_counter
 
 
 def solve(baum,var_name):
@@ -553,10 +521,11 @@ def solve(baum,var_name):
     return zaehler / nenner
 
 
-def cleanup(ergebnis):
-    global rounding
-    target_decimals_str = Config_manager("load", "Math_Options", "decimal_places", "0")
-    target_fractions = Config_manager("load", "UI", "fractions", "False")
+def cleanup(ergebnis, settings):
+    rounding = locals().get('rounding', False)
+
+    target_decimals_str = settings["decimal_places"]
+    target_fractions = settings["fractions"]
 
     try:
         target_decimals = int(target_decimals_str)
@@ -574,14 +543,14 @@ def cleanup(ergebnis):
                 rest_zaehler = zaehler % nenner
 
                 if rest_zaehler == 0:
-                    return str(ganzzahl)
+                    return str(ganzzahl), rounding
                 else:
                     if ganzzahl < 0 and rest_zaehler > 0:
                         ganzzahl += 1
                         rest_zaehler = abs(nenner - rest_zaehler)
-                    return f"{ganzzahl} {rest_zaehler}/{nenner}"
+                    return f"{ganzzahl} {rest_zaehler}/{nenner}", rounding
 
-            return str(gekuerzter_bruch)
+            return str(gekuerzter_bruch), rounding
 
         except Exception as e:
             raise ValueError(f"3024 Warnung: Bruch-Umwandlung fehlgeschlagen: {e}")
@@ -597,12 +566,12 @@ def cleanup(ergebnis):
         if gerundetes_ergebnis != ergebnis:
             rounding = True
 
-        return gerundetes_ergebnis.normalize()
+        return gerundetes_ergebnis.normalize(), rounding
 
 
     elif isinstance(ergebnis, (int, float)):
         if ergebnis == int(ergebnis):
-            return int(ergebnis)
+            return int(ergebnis), rounding
 
         else:
             s_ergebnis = str(ergebnis)
@@ -612,29 +581,25 @@ def cleanup(ergebnis):
                 if actual_decimals > target_decimals:
                     rounding = True
                     new_number = round(ergebnis, target_decimals)
-                    return new_number
+                    return new_number, rounding
 
-                return ergebnis
-            return ergebnis
-
-    return ergebnis
+                return ergebnis, rounding
+            return ergebnis, rounding
 
 
-def main():
-    global global_subprocess, var_counter, var_list
-    var_counter = 0
-    var_list = []
+    return ergebnis, rounding
 
-    if len(sys.argv) > 1:
-        received_string = sys.argv[1]
-        global_subprocess = "1"
-    else:
-        global_subprocess = "0"
-        print("Gebe das Problem ein: ")
-        received_string = input()
 
+
+
+
+
+
+def calculate(problem):
+    settings = config_manager.load_setting("all")
     try:
-        finaler_baum = ast(received_string)
+        finaler_baum, cas, var_counter = ast(problem)
+
         if cas and var_counter > 0:
             var_name_in_ast = "var0"
             ergebnis = solve(finaler_baum, var_name_in_ast)
@@ -672,7 +637,7 @@ def main():
 
             return
 
-        ergebnis = cleanup(ergebnis)
+        ergebnis, rounding = cleanup(ergebnis, settings)
         ungefaehr_zeichen = "\u2248"
 
         if isinstance(ergebnis, str) and '/' in ergebnis:
@@ -693,16 +658,20 @@ def main():
             else:
                 print(str(get_line_number()) + f" Das Ergebnis der Berechnung ist: {variable_name} = {ausgabe_string}")
         elif cas == True and rounding == True:
+            return (f"x {ungefaehr_zeichen} " + ausgabe_string)
             print(f"x {ungefaehr_zeichen} " + ausgabe_string)
 
         elif cas == True and rounding == False:
             print("x = " + ausgabe_string)
+            return ("x = " + ausgabe_string)
 
         elif rounding == True and not cas:
             print(f"{ungefaehr_zeichen} " + ausgabe_string)
+            return (f"{ungefaehr_zeichen} " + ausgabe_string)
 
         else:
             print("= " + ausgabe_string)
+            return ("= " + ausgabe_string)
 
 
 
@@ -726,8 +695,10 @@ def main():
     sys.exit(0)
 
 
-
 if __name__ == "__main__":
     debug = 0  # 1 = activated, 0 = deactivated
-    #time.sleep(100)
-    main()
+
+
+    print("Gebe das Problem ein: ")
+    problem = input()
+    calculate(problem)

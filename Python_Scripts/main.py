@@ -1,28 +1,36 @@
 #main.py
-import subprocess
 import sys
 import os
 from pathlib import Path
+import json
 
-python_interpreter = sys.executable
 
 
-UI = Path(__file__).resolve().parent / "UI.py"
-MathEngine = Path(__file__).resolve().parent / "MathEngine.py"
-ScientificEngine = Path(__file__).resolve().parent / "ScientificEngine.py"
-config_man = Path(__file__).resolve().parent / "config_manager.py"
-config = Path(__file__).resolve().parent.parent / "config.ini"
-icon = Path(__file__).resolve().parent.parent / "icons" / "icon.png"
+
+import config_manager as config_manager
+import UI as UI
+
+
 
 
 def check_files_exist():
+
+
+    UI_file = Path(__file__).resolve().parent / "UI.py"
+    MathEngine_file = Path(__file__).resolve().parent / "MathEngine.py"
+    ScientificEngine_file = Path(__file__).resolve().parent / "ScientificEngine.py"
+    config_man_file = Path(__file__).resolve().parent / "config_manager.py"
+    config_file = Path(__file__).resolve().parent.parent / "config.ini"
+    icon_file = Path(__file__).resolve().parent.parent / "icons" / "icon.png"
+
+
     REQUIRED = [
-        UI,
-        MathEngine,
-        ScientificEngine,
-        config,
-        config_man,
-        icon
+        UI_file,
+        MathEngine_file,
+        ScientificEngine_file,
+        config_file,
+        config_man_file,
+        icon_file
     ]
 
     missing_files = []
@@ -39,24 +47,12 @@ def check_files_exist():
             print(f"- {file}")
         sys.exit(1)
 
-def UICalc():
-    cmd = [
-            python_interpreter,
-            UI
-    ]
-    try:
-        ergebnis = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True)
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        return zurueckgeschickter_string
-    except subprocess.CalledProcessError as e:
-        print(f"Ein Fehler ist aufgetreten: {e}")
+
 
 def main():
-    UICalc()
+    all_settings = config_manager.load_setting("all")
+    print(all_settings)
+    UI.main()
 
 
 if __name__ == "__main__":
