@@ -4,162 +4,71 @@ import configparser
 from pathlib import Path
 import json
 
-config = Path(__file__).resolve().parent.parent / "config.ini"
+config_json = Path(__file__).resolve().parent.parent / "config.json"
+ui_strings = Path(__file__).resolve().parent.parent / "ui_strings.json"
 
-def boolean(section, value):
-    if value == "True":
-        return True
-    elif value == "False":
-        return False
-    else:
-        return "-1"
 
-def load_setting(key_value):
-    cfg_instance = configparser.ConfigParser()
-    cfg_instance.read(config, encoding='utf-8')
+
+def load_setting_value(key_value):
+    try:
+        with open(config_json, 'r', encoding= 'utf-8') as f:
+            settings_dict = json.load(f)
+
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
 
 
     if key_value == "all":
-        config_data = {
-            "use_degrees": cfg_instance.get("Scientific_Options", "use_degrees"),
-            "decimal_places": cfg_instance.get("Math_Options", "decimal_places"),
-            "darkmode": cfg_instance.get("UI", "darkmode"),
-            "after_paste_enter": cfg_instance.get("UI", "after_paste_enter"),
-            "shift_to_copy": cfg_instance.get("UI", "shift_to_copy"),
-            "show_equation": cfg_instance.get("UI", "show_equation"),
-            "fractions": cfg_instance.get("UI", "fractions")
-        }
-        return json.loads(json.dumps(config_data))
+        return settings_dict
 
     else:
-        try:
-            if str(key_value) in ("darkmode","after_paste_enter","shift_to_copy","show_equation","fractions"):
-                section = "UI"
-            elif str(key_value) in ("decimal_places"):
-                section = "Math_Options"
-            elif str(key_value) in ("use_degrees"):
-                section = "Scientific_Options"
-
-            return_value = cfg_instance.get(str(section), str(key_value))
-            return json.loads(json.dumps(return_value))
-        except (configparser.NoSectionError, configparser.NoOptionError, ValueError):
-            return -1
+        return settings_dict.get(key_value, 0)
 
 
-def save_setting(key_value, new_value):
-    config_file = configparser.ConfigParser()
-    config_file.read(config, encoding='utf-8')
-    success = False
+def load_setting_description(key_value):
+    try:
+        with open(ui_strings, 'r', encoding= 'utf-8') as f:
+            settings_dict = json.load(f)
 
-    if key_value == "decimal_places":
-            if new_value != "":
-                try:
-                    val = int(new_value)
-                    if val <= 2:
-                        val = 2
-
-                    config_file.set('Math_Options', 'decimal_places', str(val))
-                    success = True
-                except:
-                    config_file.set('Math_Options', 'decimal_places', str(2))
-                    success = False
-            else:
-                success = False
-
-    elif key_value == "darkmode" or key_value == "after_paste_enter" or key_value == "shift_to_copy" or key_value == "show_equation":
-            if new_value in ("True", "False"):
-                config_file.set('UI', key_value, str(new_value))
-                success = True
-            else:
-                success = False
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
 
 
-    elif key_value == "use_degrees":
-            if new_value in ("True", "False"):
-                config_file.set('Scientific_Options', 'use_degrees', str(new_value))
-                success = True
-            else:
-                success = False
-    elif key_value == "fractions":
-            if new_value in ("True", "False"):
-                config_file.set('UI', 'fractions', str(new_value))
-                success = True
-            else:
-                success = False
-    else:
-        success = False
-
-    if success:
-        try:
-            with open(config, 'w', encoding='utf-8') as configfile:
-                config_file.write(configfile)
-            #print("1")
-            return "1"
-        except Exception as e:
-            return (f"FEHLER: Konnte {config} nicht speichern: {e}")
-
-            #print(f"FEHLER: Konnte {config} nicht speichern: {e}")
+    if key_value == "all":
+        return settings_dict
 
     else:
-        return "-1"
-        #print("-1")
+        return settings_dict.get(key_value, 0)
 
 
-def main():
-    test = 0
-    if len(sys.argv) < 5 and test == 0:
-        print("Fehler. Es wurden nicht genügend Argumente übergeben.")
-        sys.exit(1)
-    else:
-        #
-        befehl = sys.argv[1]
-        section = sys.argv[2]
-        key_value = sys.argv[3]
-        new_value = sys.argv[4]
-        # befehl = "save"
-        # section = "UI"
-        # key_value = "darkmode"
-        # new_value = "False"
-
-    if befehl == "save":
-        save_settings(str(key_value), str(new_value))
-
-    elif befehl == "load":
-        load_settings(section, key_value)
-
-    else:
-        print("Fehler. Es wurde kein gültiger Befehl übergeben.")
-        sys.exit(1)
 
 
-# def main():
-#     test = 0
-#     if len(sys.argv) < 5 and test == 0:
-#         print("Fehler. Es wurden nicht genügend Argumente übergeben.")
-#         sys.exit(1)
-#     else:
-#         #
-#         befehl = sys.argv[1]
-#         section = sys.argv[2]
-#         key_value = sys.argv[3]
-#         new_value = sys.argv[4]
-#         # befehl = "save"
-#         # section = "UI"
-#         # key_value = "darkmode"
-#         # new_value = "False"
-#
-#     if befehl == "save":
-#         save_settings(str(key_value), str(new_value))
-#
-#     elif befehl == "load":
-#         load_settings(section, key_value)
-#
-#     else:
-#         print("Fehler. Es wurde kein gültiger Befehl übergeben.")
-#         sys.exit(1)
+def save_setting(settings_dict):
+    try:
+        with open (config_json, 'w', encoding= 'utf-8') as f:
+            json.dump(settings_dict, f, indent=4)
+            return settings_dict
+
+    except (FileNotFoundError, json.JSONDecodeError):
+        return{}
+
+
 
 
 
 if __name__ == "__main__":
+    print(load_setting_value("after_paste_enter"))
 
-    main()
+
+    all_settings = load_setting_value("all")
+    all_settings["darkmode"] = True
+    save_setting(all_settings)
+    print(load_setting_value("darkmode"))
+
+    print(load_setting_value("darkmode"))
+
+    all_settings = load_setting_value("all")
+    all_settings["darkmode"] = False
+    save_setting(all_settings)
+    print(load_setting_value("darkmode"))
+    print(load_setting_value("all"))
