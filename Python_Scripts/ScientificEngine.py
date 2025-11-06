@@ -1,20 +1,6 @@
 # ScientificEngine
-from PySide6 import QtWidgets
-from PySide6.QtCore import Qt
-import sys
-import os
-from pathlib import Path
-import time
 import math
-import configparser
-from subprocess import CalledProcessError
 
-import config_manager as config_manager
-
-config_man = str(Path(__file__).resolve().parent / "Module_config_manager.py")
-
-test = 1
-global_subprocess = 0
 
 degree_setting_sincostan = 0  # 0 = number, 1 = degrees
 

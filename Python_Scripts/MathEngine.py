@@ -521,18 +521,14 @@ def solve(baum,var_name):
     return zaehler / nenner
 
 
-def cleanup(ergebnis, settings):
+def cleanup(ergebnis):
     rounding = locals().get('rounding', False)
 
-    target_decimals_str = settings["decimal_places"]
-    target_fractions = settings["fractions"]
+    target_decimals = config_manager.load_setting_value("decimal_places")
+    target_fractions = config_manager.load_setting_value("fractions")
 
-    try:
-        target_decimals = int(target_decimals_str)
-    except ValueError:
-        target_decimals = 2
 
-    if target_fractions == "True" and isinstance(ergebnis, Decimal):
+    if target_fractions == True and isinstance(ergebnis, Decimal):
         try:
             bruch_ergebnis = fractions.Fraction.from_decimal(ergebnis)
             gekuerzter_bruch = bruch_ergebnis.limit_denominator(100000)
@@ -596,7 +592,7 @@ def cleanup(ergebnis, settings):
 
 
 def calculate(problem):
-    settings = config_manager.load_setting("all")
+    settings = config_manager.load_setting_value("all")
     try:
         finaler_baum, cas, var_counter = ast(problem)
 
@@ -613,23 +609,24 @@ def calculate(problem):
             left_val = finaler_baum.left.evaluate()
             right_val = finaler_baum.right.evaluate()
             if global_subprocess == "0":
-                ausgabe = "True" if left_val == right_val else "False"
+                ausgabe = True if left_val == right_val else False
                 print(f"{get_line_number()} Das Ergebnis der Gleichung ist: {left_val} = {right_val} -> {ausgabe}")
             else:
-                ausgabe_string = "True" if left_val == right_val else "False"
+                ausgabe_string = True if left_val == right_val else True
+                return f"= {ausgabe_string}"
                 print(f"= {ausgabe_string}")
 
             return
         else:
             if cas:
                 print("!!ERROR!! 3005 Der Solver wurde auf einer Nicht-Gleichung")  # 3005
-            elif not cas and not "=" in received_string:
+            elif not cas and not "=" in problem:
                 print("!!ERROR!! 3012 Kein '=' gefunden, obwohl eine Variable angegeben wurde.")  # 3015
 
 
-            elif cas and "=" in received_string and (
-                    received_string.index("=") == 0 or received_string.index("=") == (len(received_string) - 1)):
-                print("!!ERROR!! 3022 Einer der Seiten ist leer: " + received_string)  # 3015
+            elif cas and "=" in problem and (
+                    problem.index("=") == 0 or problem.index("=") == (len(problem) - 1)):
+                print("!!ERROR!! 3022 Einer der Seiten ist leer: " + problem)  # 3015
 
 
             else:
@@ -637,7 +634,7 @@ def calculate(problem):
 
             return
 
-        ergebnis, rounding = cleanup(ergebnis, settings)
+        ergebnis, rounding = cleanup(ergebnis)
         ungefaehr_zeichen = "\u2248"
 
         if isinstance(ergebnis, str) and '/' in ergebnis:
@@ -694,11 +691,14 @@ def calculate(problem):
 
     sys.exit(0)
 
-
-if __name__ == "__main__":
-    debug = 0  # 1 = activated, 0 = deactivated
-
-
+def test_main():
     print("Gebe das Problem ein: ")
     problem = input()
     calculate(problem)
+    test_main()
+
+
+if __name__ == "__main__":
+    debug = 0  # 1 = activated, 0 = deactivated
+    test_main()
+

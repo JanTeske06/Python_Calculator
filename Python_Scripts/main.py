@@ -20,7 +20,8 @@ def check_files_exist():
     MathEngine_file = Path(__file__).resolve().parent / "MathEngine.py"
     ScientificEngine_file = Path(__file__).resolve().parent / "ScientificEngine.py"
     config_man_file = Path(__file__).resolve().parent / "config_manager.py"
-    config_file = Path(__file__).resolve().parent.parent / "config.ini"
+    config_file_values = Path(__file__).resolve().parent.parent / "config.json"
+    ui_strings = Path(__file__).resolve().parent.parent / "ui_strings.json"
     icon_file = Path(__file__).resolve().parent.parent / "icons" / "icon.png"
 
 
@@ -28,7 +29,8 @@ def check_files_exist():
         UI_file,
         MathEngine_file,
         ScientificEngine_file,
-        config_file,
+        config_file_values,
+        ui_strings,
         config_man_file,
         icon_file
     ]
@@ -50,7 +52,7 @@ def check_files_exist():
 
 
 def main():
-    all_settings = config_manager.load_setting("all")
+    all_settings = config_manager.load_setting_value("all")
     print(all_settings)
     UI.main()
 

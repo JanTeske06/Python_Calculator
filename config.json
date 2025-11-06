@@ -1,7 +1,7 @@
 {
     "decimal_places": 2,
     "use_degrees": false,
-    "darkmode": false,
+    "darkmode": true,
     "after_paste_enter": true,
     "shift_to_copy": true,
     "show_equation": false,
