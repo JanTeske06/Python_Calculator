@@ -5,7 +5,7 @@ from pathlib import Path
 import json
 
 config_json = Path(__file__).resolve().parent.parent / "config.json"
-ui_strings = Path(__file__).resolve().parent.parent / "ui_strings.json"
+ui_strings = Path(__file__).resolve().parent.parent/ "ui_strings.json"
 
 
 

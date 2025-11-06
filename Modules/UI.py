@@ -1,17 +1,16 @@
 # Ui.py
 from PySide6 import QtWidgets, QtGui
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, Signal, QTimer
 import sys
+import json
 from pathlib import Path
 import threading
-from PySide6.QtCore import QObject, Signal, QTimer
-import json
 from pynput.keyboard import Controller
 import pyperclip
-import error as E  # Imports Error.py
 import inspect
-import config_manager as config_manager
-import MathEngine as MathEngine
+from . import error as E  # Imports Error.py
+from . import config_manager as config_manager
+from . import MathEngine as MathEngine
 
 thread_active = False
 received_result = False
@@ -123,7 +122,7 @@ class SettingsDialog(QtWidgets.QDialog):
     # 121212
 
     def save_settings(self, setting_value_list):
-        print(f"Alte Einstellungen: {setting_value_list}")
+        #print(f"Alte Einstellungen: {setting_value_list}")
 
         try:
             for key_value in self.widgets:
@@ -136,7 +135,7 @@ class SettingsDialog(QtWidgets.QDialog):
                     new_value = widget.isChecked()
 
                     if setting_value_list[key_value] != new_value:
-                        print(f"Ändere {key_value} zu {new_value}")
+                        #print(f"Ändere {key_value} zu {new_value}")
                         setting_value_list[key_value] = new_value
 
                 elif isinstance(widget, QtWidgets.QLineEdit):
@@ -148,13 +147,13 @@ class SettingsDialog(QtWidgets.QDialog):
                         if key_value == "decimal_places" and new_value_int < 2:
                             new_value_int = 2
                     except ValueError:
-                        print(f"Ungültige Eingabe '{new_value_str}', benutze alten Wert.")
+                        #print(f"Ungültige Eingabe '{new_value_str}', benutze alten Wert.")
                         new_value_int = setting_value_list[key_value]
 
                     if setting_value_list[key_value] != new_value_int:
-                        print(f"Ändere {key_value} zu {new_value_int}")
+                        #print(f"Ändere {key_value} zu {new_value_int}")
                         setting_value_list[key_value] = new_value_int
-            print(f"Speichere neue Einstellungen: {setting_value_list}")
+            #print(f"Speichere neue Einstellungen: {setting_value_list}")
             gespeicherte_settings = config_manager.save_setting(setting_value_list)
 
             if gespeicherte_settings != {}:

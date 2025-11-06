@@ -1,23 +1,12 @@
 # MathEngine.py
 import sys
-import math
-from PySide6 import QtWidgets
-from PySide6.QtCore import Qt
-import sys
-import os
 from pathlib import Path
-import time
-import pickle
-import base64
-import configparser
 from decimal import Decimal
 import fractions
 import inspect
-import error as E  # Imports Error.py
-import json
 
-import config_manager as config_manager
-import ScientificEngine
+from . import config_manager as config_manager
+from . import ScientificEngine
 
 debug = 0
 
@@ -29,8 +18,8 @@ global_subprocess = None
 python_interpreter = sys.executable
 Operations = ["+","-","*","/","=","^"]
 Science_Operations = ["sin","cos","tan","10^x","log","e^", "π", "√"]
-config_man = str(Path(__file__).resolve().parent / "config_manager.py")
-config = Path(__file__).resolve().parent.parent / "config.ini"
+config_man = str(Path(__file__).resolve()/ "config_manager.py")
+config = Path(__file__).resolve().parent / "config.ini"
 
 
 
@@ -609,11 +598,10 @@ def calculate(problem):
             left_val = finaler_baum.left.evaluate()
             right_val = finaler_baum.right.evaluate()
             if global_subprocess == "0":
-                ausgabe = True if left_val == right_val else False
+                ausgabe = "True" if left_val == right_val else "False"
                 print(f"{get_line_number()} Das Ergebnis der Gleichung ist: {left_val} = {right_val} -> {ausgabe}")
             else:
-                ausgabe_string = True if left_val == right_val else True
-                return f"= {ausgabe_string}"
+                ausgabe_string = "True" if left_val == right_val else "False"
                 print(f"= {ausgabe_string}")
 
             return
