@@ -1,29 +1,24 @@
 # Ui.py
 from PySide6 import QtWidgets, QtGui
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, Signal, QTimer
 import sys
-import subprocess
-import os
-from pathlib import Path
-import time
-import configparser
-import threading
-from PySide6.QtCore import QObject, Signal, QTimer
 import json
+from pathlib import Path
+import threading
 from pynput.keyboard import Controller
 import pyperclip
-import error as E  # Imports Error.py
 import inspect
+from . import error as E  # Imports Error.py
+from . import config_manager as config_manager
+from . import MathEngine as MathEngine
 
-received_result = False
 
-config = Path(__file__).resolve().parent.parent / "config.ini"
-config_man = str(Path(__file__).resolve().parent / "config_manager.py")
-MathEngine = str(Path(__file__).resolve().parent / "MathEngine.py")
-python_interpreter = sys.executable
+if getattr(sys, 'frozen', False):
+    PROJECT_ROOT = Path(sys._MEIPASS)
+else:
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-thread_active = False
-darkmode = False
+
 
 
 def boolean(value):
@@ -33,57 +28,18 @@ def boolean(value):
         return False
     else:
         return "-1"
+
+
 def get_line_number():
     return inspect.currentframe().f_back.f_lineno
 
-def Calc(problem):
-    cmd = [
-        python_interpreter,
-        MathEngine,
-        problem
-    ]
-    try:
-        ergebnis = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-        )
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        if ergebnis.returncode != 0 and not zurueckgeschickter_string.startswith("!!ERROR!!"):
-            print(f"Ein unerwarteter Prozessfehler ist aufgetreten: {ergebnis.stderr}")
-            return f"!!ERROR!! 4700 Unerwarteter Prozessfehler. Code: {ergebnis.returncode}"
 
-        return zurueckgeschickter_string
-    except subprocess.SubprocessError as e:
-        print(f"Ein Fehler beim Starten des Prozesses ist aufgetreten: {e}")
-        return f"!!ERROR!! 4700 Fehler beim Starten des Prozesses: {e}"
 
-def Config_manager(action, section, key_value, new_value):
-    cmd = [
-        python_interpreter,
-        config_man,
-        action,
-        section,
-        key_value,
-        new_value
-    ]
-    try:
-        ergebnis = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            check=True)
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        return zurueckgeschickter_string
-    except subprocess.CalledProcessError as e:
-        print(f"Ein Fehler ist aufgetreten: {e}") #4700
+
 
 
 def background_process(current_text):
-    return Calc(current_text)
+    return MathEngine.calculate(current_text)
 
 
 def is_shift_pressed():
@@ -92,51 +48,41 @@ def is_shift_pressed():
 
 
 class Worker(QObject):
-    job_finished = Signal(str, str)
-    global thread_active
+    job_finished = Signal(object, str)
 
     def __init__(self, problem):
         super().__init__()
         self.daten = problem
-        self.previous = problem
 
     def run_Calc(self):
-        global thread_active
-        ergebnis = Calc(self.daten)
-        self.job_finished.emit(ergebnis, self.previous)
-        thread_active = False
+
+        try:
+            ergebnis = MathEngine.calculate(self.daten)
+            self.job_finished.emit(ergebnis, self.daten)
+
+        except E.MathError as e:
+            self.job_finished.emit(e, self.daten)
+
+        except Exception as e:
+            critical_error = E.MathError(
+                message=f"Unerwarteter Absturz: {e}",
+                code="9999",
+                equation=self.daten
+            )
+            self.job_finished.emit(critical_error, self.daten)
 
 
-class Config_Signal(QObject):
-    all_settings = dict
 
-    def __init__(self):
-        global all_settings
-        super().__init__()
-        all_settings = json.loads(Config_manager("load", "all", "0", "0"))
-        print(all_settings)
-
-    def load(self, key_value):
-        return all_settings[str(key_value)]
-
-    def save(self, section, key_value, new_value):
-        return (Config_manager("save", str(section), str(key_value), str(new_value)))
 
 
 class SettingsDialog(QtWidgets.QDialog):
     settings_saved = Signal()
-    config_handler = Config_Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.widgets = {}
 
-        self.previous_is_degree_active = "False"
-        self.previous_darkmode_active = "False"
-        self.previous_auto_enter_active = "False"
-        self.previous_shift_copy_active = "False"
-        self.previous_show_equation = "False"
-        self.previous_input_text = "2"
-        self.previous_fractions = "True"
+
 
         self.setWindowTitle("Calculator Settings")
         self.resize(300, 200)
@@ -145,198 +91,107 @@ class SettingsDialog(QtWidgets.QDialog):
 
         main_layout = QtWidgets.QVBoxLayout(self)
 
-        row_h_layout = QtWidgets.QHBoxLayout()
-        main_layout.addLayout(row_h_layout)
-        label = QtWidgets.QLabel("Decimal places (min. 2):")
-        self.input_field = QtWidgets.QLineEdit()
+        self.setting_value_list = config_manager.load_setting_value("all")
+        self.setting_description_list = config_manager.load_setting_description("all")
 
-        row_h_layout.addWidget(label)
-        row_h_layout.addWidget(self.input_field)
-        row_h_layout.setStretch(1, 1)
+        if len(self.setting_value_list) == len(self.setting_description_list):
+            for key_value in self.setting_value_list:
+                value = self.setting_value_list[key_value]
+                description = self.setting_description_list[key_value]
 
-        self.is_degree_mode_check = QtWidgets.QCheckBox("Winkel in Grad (°)")
-        main_layout.addWidget(self.is_degree_mode_check)
+                if value == True or value == False:
+                    checkbox = QtWidgets.QCheckBox(description)
+                    checkbox.setChecked(value)
+                    main_layout.addWidget(checkbox)
+                    self.widgets[key_value] = checkbox
 
-        self.after_paste_enter = QtWidgets.QCheckBox("Nach 📋 automatisch Enter")
-        main_layout.addWidget(self.after_paste_enter)
+                elif MathEngine.isInt(value):
+                    row_h_layout = QtWidgets.QHBoxLayout()
+                    main_layout.addLayout(row_h_layout)
+                    label = QtWidgets.QLabel(description + " (min. 2):")
+                    input_field = QtWidgets.QLineEdit()
+                    input_field.setPlaceholderText(str(value))
+                    self.input_field_decimal = input_field
 
-        self.darkmode = QtWidgets.QCheckBox("Darkmode")
-        main_layout.addWidget(self.darkmode)
+                    row_h_layout.addWidget(label)
+                    row_h_layout.addWidget(self.input_field_decimal)
+                    row_h_layout.setStretch(1, 1)
+                    self.widgets[key_value] = self.input_field_decimal
 
-        self.shift_to_copy = QtWidgets.QCheckBox("Shift + 📋 to copy")
-        main_layout.addWidget(self.shift_to_copy)
+        else:
+            print("Error. Json Datein desynchronisiert.")
 
-        self.show_equation = QtWidgets.QCheckBox("Show equation")
-        main_layout.addWidget(self.show_equation)
 
-        self.show_fractions = QtWidgets.QCheckBox("Show fractions")
-        main_layout.addWidget(self.show_fractions)
+
 
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         main_layout.addWidget(button_box)
         main_layout.addStretch(1)
 
-        button_box.accepted.connect(self.save_settings)
+        button_box.accepted.connect(lambda: self.save_settings(self.setting_value_list))
 
         button_box.rejected.connect(self.reject)
-        self.load_current_settings()
         self.update_darkmode()
 
     # 2e2e2e
     # 121212
-    def load_current_settings(self):
 
-        def get_setting(key_value):
-            response = self.config_handler.load(key_value)
+    def save_settings(self, setting_value_list):
+        #print(f"Alte Einstellungen: {setting_value_list}")
 
-            if response == "-1":
-                return None
-            return response
+        try:
+            for key_value in self.widgets:
+                if key_value not in setting_value_list:
+                    continue
 
-        decimals_str = get_setting("decimal_places")
-        if decimals_str is not None:
-            self.input_field.setPlaceholderText(decimals_str)
-        else:
-            self.input_field.setPlaceholderText('2')
+                widget = self.widgets[key_value]
+                if isinstance(widget, QtWidgets.QCheckBox):
 
-        is_degree_active_str = get_setting("use_degrees")
+                    new_value = widget.isChecked()
 
-        if str(is_degree_active_str) == "True":
-            self.is_degree_mode_check.setChecked(True)
-        else:
-            self.is_degree_mode_check.setChecked(False)
+                    if setting_value_list[key_value] != new_value:
+                        #print(f"Ändere {key_value} zu {new_value}")
+                        setting_value_list[key_value] = new_value
 
-        after_paste_enter_str = get_setting("after_paste_enter")
-        if str(after_paste_enter_str) == "True":
-            self.after_paste_enter.setChecked(True)
-        else:
-            self.after_paste_enter.setChecked(False)
-        darkmode_active_str = get_setting("darkmode")
-        if str(darkmode_active_str) == "True":
-            self.darkmode.setChecked(True)
+                elif isinstance(widget, QtWidgets.QLineEdit):
 
-        elif str(darkmode_active_str) == "False":
-            self.darkmode.setChecked(False)
+                    new_value_str = widget.text().strip()
+                    old_value = setting_value_list[key_value]
+                    if new_value_str == "":
+                        new_value_str = setting_value_list[key_value]
+                    try:
+                        new_value_int = int(new_value_str)
+                        if key_value == "decimal_places" and new_value_int < 2:
+                            raise ValueError(f"'{new_value_int}' ist zu klein. Minimum ist 2.")
+                        if old_value != new_value_int:
+                            setting_value_list[key_value] = new_value_int
 
-        shift_copy_active_str = get_setting("shift_to_copy")
-        if str(shift_copy_active_str) == "True":
-            self.shift_to_copy.setChecked(True)
-        elif str(shift_copy_active_str) == "False":
-            self.shift_to_copy.setChecked(False)
+                    except ValueError as e:
+                        print(f"Ungültige Eingabe: {e}")
+                        QtWidgets.QMessageBox.critical(self, "Ungültige Eingabe",
+                                                       f"Fehler bei der Eingabe für '{key_value}':\n\n{e}\n\nBitte korrigiere deine Eingabe.")
 
-        show_equation_str = get_setting("show_equation")
-        if str(show_equation_str) == "True":
-            self.show_equation.setChecked(True)
-        elif str(show_equation_str) == "False":
-            self.show_equation.setChecked(False)
+                        return
+            #print(f"Speichere neue Einstellungen: {setting_value_list}")
+            gespeicherte_settings = config_manager.save_setting(setting_value_list)
 
-        fraction_str = get_setting("fractions")
-        if str(fraction_str) == "True":
-            self.show_fractions.setChecked(True)
-        elif str(fraction_str) == "False":
-            self.show_fractions.setChecked(False)
+            if gespeicherte_settings != {}:
+                self.settings_saved.emit()
+                self.accept()
+                self.update_darkmode()
+            else:
+                QtWidgets.QMessageBox.critical(self, "Fehler",
+                                               "Einstellungen konnten nicht gespeichert werden (Fehler in config_manager).")
 
-        self.previous_is_degree_active = is_degree_active_str if is_degree_active_str is not None else "False"
-        self.previous_darkmode_active = darkmode_active_str if darkmode_active_str is not None else "False"
-        self.previous_auto_enter_active = after_paste_enter_str if after_paste_enter_str is not None else "False"
-        self.previous_shift_copy_active = shift_copy_active_str if shift_copy_active_str is not None else "False"
-        self.previous_show_equation = show_equation_str if show_equation_str is not None else "False"
-        self.previous_input_text = decimals_str if decimals_str is not None else "2"
-        self.previous_fractions = fraction_str if fraction_str is not None else "2"
-
-    def save_settings(self):
-
-        is_degree_active = str(self.is_degree_mode_check.isChecked())
-        darkmode_active = str(self.darkmode.isChecked())
-        auto_enter_active = str(self.after_paste_enter.isChecked())
-        shift_copy_active = str(self.shift_to_copy.isChecked())
-        show_equation_active = str(self.show_equation.isChecked())
-        fraction_active = str(self.show_fractions.isChecked())
-
-        input_text = self.input_field.text()
-        input_decimals = input_text if input_text else "2"
-        default_decimals = self.input_field.placeholderText() if self.input_field.placeholderText() else "2"
-        input_decimals = input_text if input_text else default_decimals
-        erfolgreich_gespeichert = True
-
-        response = ""
-        error_message = ""
-
-        if (is_degree_active != self.previous_is_degree_active):
-            response = self.config_handler.save("Scientific_Options", "use_degrees", str(is_degree_active))
-            if response != "1" and not response == "":
-                erfolgreich_gespeichert = False
-                print("Fehler beim speichern")  # 4501
-                error_message = error_message + " / Degree mode"
-            elif response == "1":
-                self.previous_is_degree_active = is_degree_active
-
-        if darkmode_active != self.previous_darkmode_active:
-            response = self.config_handler.save("UI", "darkmode", str(darkmode_active))
-            if response != "1" and not response == "":
-                erfolgreich_gespeichert = False
-                print("Fehler beim speichern")  # 4501
-                error_message = error_message + " / Darkmode"
-            elif response == "1":
-                self.previous_darkmode_active = darkmode_active
-
-        if auto_enter_active != self.previous_auto_enter_active:
-            response = self.config_handler.save("UI", "after_paste_enter", str(auto_enter_active))
-            if response != "1" and not response == "":
-                erfolgreich_gespeichert = False
-                print("Fehler beim speichern")  # 4501
-                error_message = error_message + " / Enter after Paste"
-            elif response == "1":
-                self.previous_auto_enter_active = auto_enter_active
-
-        if shift_copy_active != self.previous_shift_copy_active:
-            response = self.config_handler.save("UI", "shift_to_copy", str(shift_copy_active))
-            if response != "1" and not response == "":
-                erfolgreich_gespeichert = False
-                print("Fehler beim speichern")  # 4501
-                error_message = error_message + " / Shift + Copy"
-            elif response == "1":
-                self.previous_shift_copy_active = shift_copy_active
-
-        if show_equation_active != self.previous_show_equation:
-            response = self.config_handler.save("UI", "show_equation", str(show_equation_active))
-            if response != "1" and not response == "":
-                erfolgreich_gespeichert = False
-                print("Fehler beim speichern")  # 4501
-                error_message = error_message + " / show_equation"
-            elif response == "1":
-                self.previous_show_equation = show_equation_active
-
-        if fraction_active != self.previous_fractions:
-            response = self.config_handler.save("UI", "fractions", str(fraction_active))
-            if response != "1" and not response == "":
-                erfolgreich_gespeichert = False
-                print("Fehler beim speichern")  # 4501
-                error_message = error_message + " / fractions"
-            elif response == "1":
-                self.previous_fractions = fraction_active
+        except Exception as e:
+            # Fängt alle anderen Fehler ab (z.B. widget nicht gefunden)
+            QtWidgets.QMessageBox.critical(self, "Fataler Fehler", f"Ein Fehler ist aufgetreten: {e}")
 
 
-        if input_decimals != self.previous_input_text:
-            response = self.config_handler.save("Math_Options", "decimal_places", str(input_decimals))
 
-            if response != "1" and not response == "":
-                erfolgreich_gespeichert = False
-                error_message = error_message + " / Decimals"  # 4501
-            elif response == "1":
-                self.previous_input_text = input_decimals
-
-        if erfolgreich_gespeichert or response == "":
-            self.settings_saved.emit()
-            self.accept()
-            Config_Signal()
-            self.load_current_settings()
-        else:
-            QtWidgets.QMessageBox.critical(self, "Fehler",
-                                           "Nicht alle Einstellungen konnten gespeichert werden." + error_message)  # 4501
 
     def update_darkmode(self):
-        if self.config_handler.load("darkmode") == "True":
+        if self.setting_value_list["darkmode"] == True:
             self.setStyleSheet("""
                         QDialog {background-color: #121212;}
                         QLabel {color: white;}
@@ -348,9 +203,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
 
 class CalculatorPrototype(QtWidgets.QWidget):
-    config_handler = Config_Signal()
     display_font_size = 4.8
-    first_run = True
     shift_is_held = False
 
     hold_timer = None
@@ -362,6 +215,12 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
     def __init__(self):
         super().__init__()
+
+        self.setting_value_list = config_manager.load_setting_value("all")
+
+        self.thread_active = False
+        self.received_result = False
+        self.first_run = True
         self.previous_equation = ""
         self.undo = ["0"]
         self.redo = []
@@ -369,7 +228,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
         self.hold_timer.timeout.connect(self.handle_hold_tick)
         self.current_text = ""
 
-        icon_path = Path(__file__).resolve().parent.parent / "icons" / "icon.png"
+        icon_path = PROJECT_ROOT / "icons" / "icon.png"
         app_icon = QtGui.QIcon(str(icon_path))
 
         self.setWindowIcon(app_icon)
@@ -506,12 +365,11 @@ class CalculatorPrototype(QtWidgets.QWidget):
     def handle_button_press(self, value):
         global first_run
         global mein_thread
-        global received_result
 
         self.current_text = self.display.text()
 
-        if received_result == True and not value == "<":
-            received_result = False
+        if self.received_result == True and not value == "<":
+            self.received_result = False
             ungefaehr_zeichen = "\u2248"
             marker_to_find = ""
 
@@ -546,7 +404,8 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
                 except ValueError:
                     pass
-
+        if self.current_text.strip() == "False" or self.current_text.strip() == "True":
+            self.current_text = "0"
         if value == 'C':
             self.current_text = "0"
             self.display.setText(self.current_text)
@@ -591,10 +450,13 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
                     self.current_text = self.current_text + "0"
 
+            if self.current_text.endswith("True") or self.current_text.endswith("False"):
+                self.current_text = self.current_text[:-5]
 
-            if self.current_text.endswith("sin(") or self.current_text.endswith("cos(") or self.current_text.endswith(
+            elif self.current_text.endswith("sin(") or self.current_text.endswith("cos(") or self.current_text.endswith(
                     "tan(") or self.current_text.endswith("log("):
                 self.current_text = self.current_text[:-4]
+
 
             elif self.current_text.endswith("e^(") or self.current_text.endswith("sin") or self.current_text.endswith(
                     "cos") or self.current_text.endswith("tan") or self.current_text.endswith("log"):
@@ -615,20 +477,17 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
         elif value == '⏎':
             print(str(get_line_number()) + " " + self.current_text)
-            global thread_active
 
-            if thread_active:
+            if self.thread_active:
                 print("FEHLER: Eine Berechnung läuft bereits!")  # 4002
                 return
             else:
-                thread_active = True
+                self.thread_active = True
                 self.update_return_button()
 
             text_to_display = self.display.text()
             self.current_text = text_to_display
-
-            if self.config_handler.load(
-                    "show_equation") == "True" and self.previous_equation and not "x" in self.current_text:
+            if self.setting_value_list["show_equation"]  == True and self.previous_equation and not "x" in self.current_text:
                 is_original_equation = (self.current_text == self.previous_equation)
 
                 if not is_original_equation and not "x" in self.current_text:
@@ -654,7 +513,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
             if not self.current_text.strip():
                 print("FEHLER: Leerer String an MathEngine gesendet.")
-                thread_active = False
+                self.thread_active = False
                 self.update_return_button()
                 self.display.setText(text_to_display)
                 return
@@ -700,7 +559,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
 
         elif value == '📋':
-            if self.shift_is_held and self.config_handler.load("shift_to_copy") == "True":
+            if self.shift_is_held and self.setting_value_list["shift_to_copy"] == True:
 
                 if '=' in self.current_text and not 'x' in self.current_text:
 
@@ -733,17 +592,18 @@ class CalculatorPrototype(QtWidgets.QWidget):
                     self.undo.append(self.current_text)
                     self.redo.clear()
 
-                    response = self.config_handler.load("after_paste_enter")
+                    response = self.setting_value_list["after_paste_enter"]
 
-                    if response == "False":
+
+                    if response == False:
                         self.update_font_size_display()
                         pass
-                    elif response == "True":
-                        if thread_active:
+                    elif response == True:
+                        if self.thread_active:
                             print("FEHLER: Eine Berechnung läuft bereits!")  # 4002
                             return
                         else:
-                            thread_active = True
+                            self.thread_active = True
                             self.update_return_button()
                             self.display.setText("...")
                             worker_instanz = Worker(self.current_text)
@@ -786,19 +646,16 @@ class CalculatorPrototype(QtWidgets.QWidget):
         verfuegbare_breite = self.display.width() - padding
 
         text_breite = fm.horizontalAdvance(self.current_text)
-        if len(self.current_text) >= 55:
-            aktuelle_groesse = MIN_FONT_SIZE
 
-        else:
-            while text_breite > verfuegbare_breite and aktuelle_groesse >= MIN_FONT_SIZE:
+        while text_breite > verfuegbare_breite and aktuelle_groesse >= MIN_FONT_SIZE:
                 aktuelle_groesse -= 0.01
                 font.setPointSize(aktuelle_groesse)
                 fm = QtGui.QFontMetrics(font)
                 text_breite = fm.horizontalAdvance(self.current_text)
 
-            temp_size = aktuelle_groesse
+        temp_size = aktuelle_groesse
 
-            while temp_size <= MAX_FONT_SIZE:
+        while temp_size <= MAX_FONT_SIZE:
                 temp_size += 0.01
                 font.setPointSize(temp_size)
                 fm_temp = QtGui.QFontMetrics(font)
@@ -812,23 +669,20 @@ class CalculatorPrototype(QtWidgets.QWidget):
         self.display.setFont(font)
 
     def update_return_button(self):
-        global thread_active
         return_button = self.button_objects.get('⏎')
         if not return_button:
             return
-        if thread_active == True:
+        if self.thread_active == True:
             return_button.setStyleSheet("background-color: #FF0000; color: white; font-weight: bold;")
             return_button.setText("X")
-        elif thread_active == False:
+        elif self.thread_active == False:
             return_button.setStyleSheet("background-color: #007bff; color: white; font-weight: bold;")
             return_button.setText("⏎")
         return_button.update()
 
     def update_darkmode(self):
-        global darkmode
-        global thread_active
 
-        if self.config_handler.load("darkmode") == "True":
+        if self.setting_value_list["darkmode"] == True:
             for text, button in self.button_objects.items():
                 if text != '⏎':
                     button.setStyleSheet("background-color: #121212; color: white; font-weight: bold;")
@@ -837,17 +691,17 @@ class CalculatorPrototype(QtWidgets.QWidget):
                     return_button = self.button_objects.get('⏎')
                     if not return_button:
                         return
-                    if thread_active == True:
+                    if self.thread_active == True:
                         return_button.setStyleSheet("background-color: #FF0000; color: white; font-weight: bold;")
                         return_button.setText("X")
-                    elif thread_active == False:
+                    elif self.thread_active == False:
                         return_button.setStyleSheet("background-color: #007bff; color: white; font-weight: bold;")
                         return_button.setText("⏎")
 
             self.setStyleSheet(f"background-color: #121212;")
             self.display.setStyleSheet("background-color: #121212; color: white; font-weight: bold;")
 
-        elif self.config_handler.load("darkmode") == "False":
+        elif self.setting_value_list["darkmode"] == False:
             for text, button in self.button_objects.items():
                 if text != '⏎':
                     button.setStyleSheet("font-weight: normal;")
@@ -856,10 +710,10 @@ class CalculatorPrototype(QtWidgets.QWidget):
                     return_button = self.button_objects.get('⏎')
                     if not return_button:
                         return
-                    if thread_active == True:
+                    if self.thread_active == True:
                         return_button.setStyleSheet("background-color: #FF0000; color: white; font-weight: bold;")
                         return_button.setText("X")
-                    elif thread_active == False:
+                    elif self.thread_active == False:
                         return_button.setStyleSheet("background-color: #007bff; color: white; font-weight: bold;")
                         return_button.setText("⏎")
             self.setStyleSheet("")
@@ -868,10 +722,11 @@ class CalculatorPrototype(QtWidgets.QWidget):
     def open_settings(self):
         settings_dialog = SettingsDialog(self)
         settings_dialog.exec()
+        self.setting_value_list = config_manager.load_setting_value("all")
         self.update_darkmode()
 
     def get_message_box_stylesheet(self):
-        if self.config_handler.load("darkmode") == "True":
+        if self.setting_value_list["darkmode"] == True:
             return """
                 QMessageBox { 
                     background-color: #121212; 
@@ -894,44 +749,48 @@ class CalculatorPrototype(QtWidgets.QWidget):
             return ""
 
     def Calc_result(self, ergebnis, equation):
-        global received_result
-        received_result = True
+        self.received_result = True
+        self.thread_active = False
 
-        if equation.endswith('=') and self.config_handler.load("show_equation") == "True":
+        if equation.endswith('=') and self.setting_value_list["show_equation"] == True:
             equation = equation[:-1]
         print(ergebnis)
         self.update_return_button()
-        if ergebnis.startswith("!!ERROR!!"):
-            error_message = ergebnis.replace("!!ERROR!! ", "")
+
+        if isinstance(ergebnis, E.MathError):
+            error_obj = ergebnis
+
             error_box = QtWidgets.QMessageBox(self)
-            error_code = ergebnis[10:14]
-            additional_info = ergebnis[14:]
+            error_code = error_obj.code
+            additional_info = f"Details: {error_obj.message}\nGleichung: {error_obj.equation}"
+
             error_box.setIcon(QtWidgets.QMessageBox.Critical)
             error_box.setWindowTitle("Berechnungsfehler")
-
-            error_box.setText(f"Error " + error_code + ": " + E.ERROR_MESSAGES.get(error_code, "Unbekannter Fehler"))
+            error_box.setText(f"Error {error_code}: {E.ERROR_MESSAGES.get(error_code, 'Unbekannter Fehler')}")
             error_box.setInformativeText(additional_info)
-
             error_box.setStandardButtons(QtWidgets.QMessageBox.Ok)
             error_box.setStyleSheet(self.get_message_box_stylesheet())
             error_box.exec()
+
             self.display.setText(equation)
             self.update_font_size_display()
             return
+
+
         math_engine_output = ergebnis.strip()
         final_display_text = ""
 
-        show_equation_setting = self.config_handler.load("show_equation")
+        show_equation_setting = self.setting_value_list["show_equation"]
 
-        if (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == "True":
+        if (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == True:
             math_engine_output = math_engine_output[math_engine_output.index("=")+1:]
             final_display_text = f"{equation} | {math_engine_output}"
 
-        elif(math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == "False":
+        elif(math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == False:
             math_engine_output = math_engine_output[math_engine_output.index("=")+1:]
             final_display_text = f"{math_engine_output}"
 
-        elif show_equation_setting == "True":
+        elif show_equation_setting == True:
             is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
 
             if is_solver_result:
@@ -948,7 +807,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 else:
                     final_display_text = f"{equation} = {clean_result}"
 
-        elif show_equation_setting== "False":
+        elif show_equation_setting== False:
             print("x")
             is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
 
@@ -978,9 +837,14 @@ class CalculatorPrototype(QtWidgets.QWidget):
         self.previous_equation = equation
 
 
+def main():
+    app = QtWidgets.QApplication()
+    window = CalculatorPrototype()
+    window.show()
+    sys.exit(app.exec())
+
 if __name__ == "__main__":
-    Config_Signal()
-    app = QtWidgets.QApplication(sys.argv)
+    app = QtWidgets.QApplication()
     window = CalculatorPrototype()
     window.show()
     sys.exit(app.exec())

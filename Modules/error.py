@@ -2,6 +2,32 @@
 
 
 
+
+class MathError(Exception):
+    def __init__(self, message, code="9999", equation=None):
+        super().__init__(message)
+        self.message = message
+        self.code = code
+        self.equation = equation
+
+class SyntaxError(MathError):
+    pass
+
+class CalculationError(MathError):
+    pass
+
+class SolverError(MathError):
+    pass
+
+
+
+
+
+
+
+
+
+
 Error_Dictionary= {
 
     "1" : "Missing Files",
@@ -57,6 +83,7 @@ ERROR_MESSAGES = {
     "3023" : "Missing '()':", # +equation
     "3024" : "Invalid fraction",
     "3025" : "One of the sides is empty.",
+    "3026" : "Number too big.",
 
 
     "4700" : "Process already running",

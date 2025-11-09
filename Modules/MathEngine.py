@@ -1,78 +1,20 @@
 # MathEngine.py
 import sys
-import math
-from PySide6 import QtWidgets
-from PySide6.QtCore import Qt
-import sys
-import subprocess
-import os
-from pathlib import Path
-import time
-import pickle
-import base64
-import configparser
-from decimal import Decimal
+from decimal import Decimal, getcontext, Overflow
 import fractions
 import inspect
 
-rounding = False
-cas = False
-var_counter = 0
-var_list = []
-global_subprocess = None
-python_interpreter = sys.executable
+from . import config_manager as config_manager
+from . import ScientificEngine
+from . import error as E
+
+debug = True
+
 Operations = ["+","-","*","/","=","^"]
 Science_Operations = ["sin","cos","tan","10^x","log","e^", "π", "√"]
-ScientificEngine = str(Path(__file__).resolve().parent / "ScientificEngine.py")
-config_man = str(Path(__file__).resolve().parent / "config_manager.py")
-config = Path(__file__).resolve().parent.parent / "config.ini"
 
+getcontext().prec = 50
 
-
-
-
-
-
-def Config_manager(action, section, key_value, new_value):
-    cmd = [
-        python_interpreter,
-        config_man,
-        action,
-        section,
-        key_value,
-        new_value
-    ]
-    try:
-        ergebnis = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            check=True)
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        return zurueckgeschickter_string
-    except subprocess.CalledProcessError as e:
-        print(f"3721 Ein Fehler ist aufgetreten: {e}") #3721
-
-
-def ScienceCalculator(problem):
-    cmd = [
-            python_interpreter,
-            ScientificEngine,
-            problem
-
-    ]
-    try:
-        ergebnis = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True)
-        zurueckgeschickter_string = ergebnis.stdout.strip()
-        return zurueckgeschickter_string
-    except subprocess.CalledProcessError as e:
-        print(f"3721 Ein Fehler ist aufgetreten: {e}") #3721
 
 
 def get_line_number():
@@ -112,7 +54,7 @@ def isolate_bracket(problem, b_anfang):
     start = b_anfang
     start_klammer_index = problem.find('(', start)
     if start_klammer_index == -1:
-        raise SyntaxError("3000 Fehlende öffnende Klammer nach Funktionsnamen.") #3000
+        raise E.SyntaxError(f"Mehrere Fehlende öffnende Klammer nach Funktionsnamen.", code="3000")
     b = start_klammer_index + 1
     bracket_count = 1
     while bracket_count != 0 and b < len(problem):
@@ -124,8 +66,12 @@ def isolate_bracket(problem, b_anfang):
     ergebnis = problem[start:b]
     return (ergebnis, b)
 
+
 class Number:
     def __init__(self, value):
+        if not isinstance(value, Decimal):
+            value = str(value)
+
         self.value = Decimal(value)
 
     def evaluate(self):
@@ -135,7 +81,13 @@ class Number:
         return (0, self.value)
 
     def __repr__(self):
-        return f"Nummer({self.value})"
+        try:
+            display_value = self.value.to_normal_string()
+        except AttributeError:
+            # Fallback für ältere Decimal-Versionen
+            display_value = str(self.value)
+
+        return f"Nummer({display_value})"
 
 
 class Variable:
@@ -143,13 +95,13 @@ class Variable:
         self.name = name
 
     def evaluate(self):
-        raise SyntaxError("3001 Fehlender Solver.") #3001
+        raise E.SolverError(f"Non linear problem.", code="3005")
 
     def collect_term(self, var_name):
         if self.name == var_name:
             return (1, 0)
         else:
-            raise ValueError(f"3002 Mehrere Variablen gefunden: {self.name}") #3002
+            raise E.SolverError(f"Mehrere Variablen gefunden: {self.name}", code="3002")
             return (0, 0)
 
     def __repr__(self):
@@ -176,12 +128,13 @@ class BinOp:
             return left_value ** right_value
         elif self.operator == '/':
             if right_value == 0:
-                raise ZeroDivisionError("3003 Teilen durch Null") #3003
+                raise E.CalculationError("Teilen durch Null", code = "3003")
+
             return left_value / right_value
         elif self.operator == '=':
             return left_value == right_value
         else:
-            raise ValueError(f"3004Unbekannter Operator: {self.operator}") #3004
+            raise E.CalculationError(f"Unbekannter Operator: {self.operator}", code="3004")
 
     def collect_term(self, var_name):
         (left_faktor, left_konstante) = self.left.collect_term(var_name)
@@ -199,7 +152,7 @@ class BinOp:
 
         elif self.operator == '*':
             if left_faktor != 0 and right_faktor != 0:
-                raise SyntaxError("3005 x^x Fehler.") #3005
+                raise E.SyntaxError("x^x Fehler.", code = "3005")
 
             elif left_faktor == 0:
                 result_faktor = left_konstante * right_faktor
@@ -219,9 +172,10 @@ class BinOp:
 
         elif self.operator == '/':
             if right_faktor != 0:
-                raise ValueError("3006 Nicht lineare Gleichung. (Teilen durch x)") #3006
+
+                raise E.SolverError("Nicht lineare Gleichung. (Teilen durch x)", code = "3006")
             elif right_konstante == 0:
-                raise ZeroDivisionError("3003 Solver: Teilen durch Null") # 3003
+                raise E.SolverError("Solver: Teilen durch Null", code="3003")
             else:
                 result_faktor = left_faktor / right_konstante
                 result_konstante = left_konstante / right_konstante
@@ -231,22 +185,22 @@ class BinOp:
 
 
         elif self.operator == '^':
-            raise ValueError("3007 Potenzen werden vom linearen Solver nicht unterstützt.") #3007
+            raise E.SolverError("Potenzen werden vom linearen Solver nicht unterstützt.", code = "3007")
 
 
         elif self.operator == '=':
-            raise ValueError("3720 Sollte nicht passieren: '=' innerhalb von collect_terms") #3720
+            raise E.SolverError("Sollte nicht passieren: '=' innerhalb von collect_terms", code="3720")
 
         else:
-            raise ValueError(f"3004 Unbekannter Operator: {self.operator}") #3004
+            raise E.CalculationError(f"Unbekannter Operator: {self.operator}", code = "3004")
 
     def __repr__(self):
         return f"BinOp({self.operator!r}, left={self.left}, right={self.right})"
 
 
+
 def translator(problem):
-    global var_counter
-    global var_list
+    var_counter = 0
     var_list = [None] * len(problem)
     full_problem = []
     b = 0
@@ -262,7 +216,7 @@ def translator(problem):
             while (b + 1 <len(problem)) and (isInt(problem[b + 1]) or problem[b + 1] == "."):
                 if problem[b + 1] == ".":
                     if hat_schon_komma:
-                        raise SyntaxError("3008 Doppeltes Kommazeichen.") #3008
+                        raise E.SyntaxError("Doppeltes Kommazeichen.", code = "3008" )
                     hat_schon_komma = True
 
                 b += 1
@@ -290,9 +244,6 @@ def translator(problem):
         elif current_char == ",":
             full_problem.append(",")
 
-        # elif(current_char) in Science_Operations:
-        #     full_problem.append(ScienceCalculator(current_char))
-
         elif ((((current_char) == 's' or (current_char) == 'c' or (current_char) == 't' or (
         current_char) == 'l') and len(problem) - b >= 5) or
               (current_char == '√' and len(problem) - b >= 2) or
@@ -314,22 +265,21 @@ def translator(problem):
                         full_problem.append('(')
                         b += 3
                     else:
-                        raise ValueError(
-                            f"3010 Fehlende Klammer nach: '{problem[b:b + 3]}'")
+                        raise E.CalculationError(f"Fehlende Klammer nach: '{problem[b:b + 3]}", code = "3010")
                 elif len(problem) - b == 3 and problem[b:b + 3] in ['sin', 'cos', 'tan', 'log']:
-                    raise ValueError(
-                        f"3023 Fehlende Klammer nach: '{problem[b:b + 3]}'")
+                    raise E.CalculationError(f"Fehlende Klammer nach: '{problem[b:b + 3]}", code="3023")
 
 
 
 
         elif current_char == 'π':
-            ergebnis_string = ScienceCalculator('π')
+            ergebnis_string = ScientificEngine.isPi(str(current_char))
+
             try:
                 berechneter_wert = Decimal(ergebnis_string)
                 full_problem.append(berechneter_wert)
             except ValueError:
-                raise ValueError(f"3219 Fehler bei Konstante π: {ergebnis_string}") #3219
+                raise E.CalculationError(f"Fehler bei Konstante π: {ergebnis_string}", code = "3219")
 
 
         else:
@@ -374,27 +324,28 @@ def translator(problem):
 
         b += 1
 
-    return full_problem
+    return full_problem, var_counter
 
 
 def ast(received_string):
-    global cas
-    analysed = translator(received_string)
+
+    analysed, var_counter = translator(received_string)
+
     if analysed and analysed[0] == "=" and not "var0" in analysed:
         analysed.pop(0)
-        if global_subprocess == "0":
+        if debug == True:
             print("Gleichheitszeichen am Anfang entfernt.")
 
     if analysed and analysed[-1] == "="and not "var0" in analysed:
         analysed.pop()
-        if global_subprocess == "0":
+        if debug == True:
             print("Gleichheitszeichen am Ende entfernt.")
 
     if  ((analysed and analysed[-1] == "=") or (analysed and analysed[0] == "=")) and "var0" in analysed:
-        raise ValueError(f"3025 {received_string}")
+        raise E.CalculationError(f"{received_string}", code = "3025")
 
 
-    if global_subprocess == "0":
+    if debug == True:
         print(analysed)
 
 
@@ -404,25 +355,24 @@ def ast(received_string):
             baum_in_der_klammer = parse_sum(tokens)
 
             if not tokens or tokens.pop(0) != ')':
-                raise SyntaxError("3009 Fehlende schließende Klammer ')'") #3009
+                raise E.SyntaxError("Fehlende schließende Klammer ')'", code = "3009")
 
             return baum_in_der_klammer
 
         elif token in Science_Operations:
 
             if token == 'π':
-                ScienceOp = 'π'
-                ergebnis = ScienceCalculator(ScienceOp)
+                ergebnis = ScientificEngine.isPi(token)
 
                 try:
                     berechneter_wert = Decimal(ergebnis)
                     return Number(berechneter_wert)
                 except ValueError:
-                    raise SyntaxError(f"3219 Fehler bei Konstante π: {ergebnis}") #3219
+                    raise E.SyntaxError(f"Fehler bei Konstante π: {ergebnis}", code = "3219")
 
             else:
                 if not tokens or tokens.pop(0) != '(':
-                    raise SyntaxError(f"3010 Fehlende öffnende Klammer nach Funktion {token}") #3010
+                    raise E.SyntaxError(f"Fehlende öffnende Klammer nach Funktion {token}", code = "3010")
 
                 argument_baum = parse_sum(tokens)
 
@@ -430,22 +380,22 @@ def ast(received_string):
                     tokens.pop(0)
                     basis_baum = parse_sum(tokens)
                     if not tokens or tokens.pop(0) != ')':
-                        raise SyntaxError(f"3009 Fehlende schließende Klammer nach Logarithmusbasis.") #3009
+                        raise E.SyntaxError(f"Fehlende schließende Klammer nach Logarithmusbasis.", code = "3009") #3009
                     argument_wert = argument_baum.evaluate()
                     basis_wert = basis_baum.evaluate()
                     ScienceOp = f"{token}({argument_wert},{basis_wert})"
                 else:
                     if not tokens or tokens.pop(0) != ')':
-                        raise SyntaxError(f"3009 Fehlende schließende Klammer nach Funktion '{token}'") #3009
+                        raise E.SyntaxError(f"Fehlende schließende Klammer nach Funktion '{token}'", code = "3009") #3009
 
                     argument_wert = argument_baum.evaluate()
                     ScienceOp = f"{token}({argument_wert})"
-                ergebnis_string = ScienceCalculator(ScienceOp)
+                ergebnis_string = ScientificEngine.unknown_function(ScienceOp)
                 try:
-                    berechneter_wert = float(ergebnis_string)
+                    berechneter_wert = fractions.Fraction(ergebnis_string)
                     return Number(berechneter_wert)
                 except ValueError:
-                    raise SyntaxError(f"3218 Fehler bei wissenschaftlicher Funktion: {ergebnis_string}") #3218
+                    raise E.SyntaxError(f"Fehler bei wissenschaftlicher Funktion: {ergebnis_string}", code = "3218")
 
         elif isinstance(token, Decimal):
             return Number(token)
@@ -459,8 +409,7 @@ def ast(received_string):
             return Variable(token)
 
         else:
-            raise SyntaxError(f"3012 Unerwartetes Token: {token}") #3012
-
+            raise E.SyntaxError(f"Unerwartetes Token: {token}", code = "3012") #3012
 
     def parse_unary(tokens):
             if tokens and tokens[0] in ('+', '-'):
@@ -470,7 +419,7 @@ def ast(received_string):
                 if operator == '-':
                     if isinstance(operand, Number):
                         return Number(-operand.evaluate())
-                    return BinOp(Number(0.0), '-', operand)
+                    return BinOp(Number('0'), '-', operand)
                 else:
                     return operand
             return parse_power(tokens)
@@ -509,7 +458,7 @@ def ast(received_string):
         while tokens and tokens[0] in ("+", "-"):
 
             operator = tokens.pop(0)
-            if debug == 1:
+            if debug == True:
                 print("Currently at:" + str(operator) + "in parse_sum")
             rechte_seite = parse_term(tokens)
             aktueller_baum = BinOp(aktueller_baum, operator, rechte_seite)
@@ -531,16 +480,20 @@ def ast(received_string):
         cas = True
 
 
-    if global_subprocess == "0":
+    if debug == True:
         print("Finaler AST:")
         print(finaler_baum)
 
-    return finaler_baum
+    cas = locals().get('cas', False)
+
+
+
+    return finaler_baum, cas, var_counter
 
 
 def solve(baum,var_name):
     if not isinstance(baum, BinOp) or baum.operator != '=':
-        raise ValueError("3012 Keine gültige Gleichung zum Lösen.") #3012
+        raise E.SolverError("Keine gültige Gleichung zum Lösen.", code = "3012") #3012
     (A, B) = baum.left.collect_term(var_name)
     (C, D) = baum.right.collect_term(var_name)
     nenner = A - C
@@ -554,16 +507,13 @@ def solve(baum,var_name):
 
 
 def cleanup(ergebnis):
-    global rounding
-    target_decimals_str = Config_manager("load", "Math_Options", "decimal_places", "0")
-    target_fractions = Config_manager("load", "UI", "fractions", "False")
+    rounding = locals().get('rounding', False)
 
-    try:
-        target_decimals = int(target_decimals_str)
-    except ValueError:
-        target_decimals = 2
+    target_decimals = config_manager.load_setting_value("decimal_places")
+    target_fractions = config_manager.load_setting_value("fractions")
 
-    if target_fractions == "True" and isinstance(ergebnis, Decimal):
+
+    if target_fractions == True and isinstance(ergebnis, Decimal):
         try:
             bruch_ergebnis = fractions.Fraction.from_decimal(ergebnis)
             gekuerzter_bruch = bruch_ergebnis.limit_denominator(100000)
@@ -574,17 +524,17 @@ def cleanup(ergebnis):
                 rest_zaehler = zaehler % nenner
 
                 if rest_zaehler == 0:
-                    return str(ganzzahl)
+                    return str(ganzzahl), rounding
                 else:
                     if ganzzahl < 0 and rest_zaehler > 0:
                         ganzzahl += 1
                         rest_zaehler = abs(nenner - rest_zaehler)
-                    return f"{ganzzahl} {rest_zaehler}/{nenner}"
+                    return f"{ganzzahl} {rest_zaehler}/{nenner}", rounding
 
-            return str(gekuerzter_bruch)
+            return str(gekuerzter_bruch), rounding
 
         except Exception as e:
-            raise ValueError(f"3024 Warnung: Bruch-Umwandlung fehlgeschlagen: {e}")
+            raise CalculationError(f"Warnung: Bruch-Umwandlung fehlgeschlagen: {e}", code = "3024")
             pass
 
     if isinstance(ergebnis, Decimal):
@@ -597,12 +547,12 @@ def cleanup(ergebnis):
         if gerundetes_ergebnis != ergebnis:
             rounding = True
 
-        return gerundetes_ergebnis.normalize()
+        return gerundetes_ergebnis.normalize(), rounding
 
 
     elif isinstance(ergebnis, (int, float)):
         if ergebnis == int(ergebnis):
-            return int(ergebnis)
+            return int(ergebnis), rounding
 
         else:
             s_ergebnis = str(ergebnis)
@@ -612,29 +562,23 @@ def cleanup(ergebnis):
                 if actual_decimals > target_decimals:
                     rounding = True
                     new_number = round(ergebnis, target_decimals)
-                    return new_number
+                    return new_number, rounding
 
-                return ergebnis
-            return ergebnis
-
-    return ergebnis
+                return ergebnis, rounding
+            return ergebnis, rounding
 
 
-def main():
-    global global_subprocess, var_counter, var_list
-    var_counter = 0
+    return ergebnis, rounding
+
+
+
+
+def calculate(problem):
+    settings = config_manager.load_setting_value("all")
     var_list = []
-
-    if len(sys.argv) > 1:
-        received_string = sys.argv[1]
-        global_subprocess = "1"
-    else:
-        global_subprocess = "0"
-        print("Gebe das Problem ein: ")
-        received_string = input()
-
     try:
-        finaler_baum = ast(received_string)
+        finaler_baum, cas, var_counter = ast(problem)
+
         if cas and var_counter > 0:
             var_name_in_ast = "var0"
             ergebnis = solve(finaler_baum, var_name_in_ast)
@@ -647,32 +591,27 @@ def main():
         elif cas and var_counter == 0:
             left_val = finaler_baum.left.evaluate()
             right_val = finaler_baum.right.evaluate()
-            if global_subprocess == "0":
-                ausgabe = "True" if left_val == right_val else "False"
-                print(f"{get_line_number()} Das Ergebnis der Gleichung ist: {left_val} = {right_val} -> {ausgabe}")
-            else:
-                ausgabe_string = "True" if left_val == right_val else "False"
-                print(f"= {ausgabe_string}")
+            ausgabe_string = "True" if left_val == right_val else "False"
+            return f"= {ausgabe_string}"
 
-            return
         else:
             if cas:
-                print("!!ERROR!! 3005 Der Solver wurde auf einer Nicht-Gleichung")  # 3005
-            elif not cas and not "=" in received_string:
-                print("!!ERROR!! 3012 Kein '=' gefunden, obwohl eine Variable angegeben wurde.")  # 3015
+                raise E.SolverError("Der Solver wurde auf einer Nicht-Gleichung", code = "3005")
+            elif not cas and not "=" in problem:
+                raise E.SolverError("Kein '=' gefunden, obwohl eine Variable angegeben wurde.", code="3012")
 
 
-            elif cas and "=" in received_string and (
-                    received_string.index("=") == 0 or received_string.index("=") == (len(received_string) - 1)):
-                print("!!ERROR!! 3022 Einer der Seiten ist leer: " + received_string)  # 3015
+            elif cas and "=" in problem and (
+                    problem.index("=") == 0 or problem.index("=") == (len(problem) - 1)):
+                raise E.SolverError("Einer der Seiten ist leer: " + str(problem), code = "3022")
 
 
             else:
-                print("!!ERROR!! 3015 Der Taschenrechner wurde auf einer Gleichung aufgerufen.")  # 3015
+                raise E.CalculationError("Der Taschenrechner wurde auf einer Gleichung aufgerufen.", code="3015")
 
             return
 
-        ergebnis = cleanup(ergebnis)
+        ergebnis, rounding = cleanup(ergebnis)
         ungefaehr_zeichen = "\u2248"
 
         if isinstance(ergebnis, str) and '/' in ergebnis:
@@ -686,48 +625,52 @@ def main():
         else:
             ausgabe_string = str(ergebnis)
 
-        if global_subprocess == "0":
-            variable_name = var_list[0] if var_list else "Ergebnis"
-            if rounding == True and not cas:
-                print( str(get_line_number()) + f" Das Ergebnis der Berechnung ist: {variable_name} {ungefaehr_zeichen} {ausgabe_string}")
-            else:
-                print(str(get_line_number()) + f" Das Ergebnis der Berechnung ist: {variable_name} = {ausgabe_string}")
-        elif cas == True and rounding == True:
-            print(f"x {ungefaehr_zeichen} " + ausgabe_string)
+        if cas == True and rounding == True:
+            return (f"x {ungefaehr_zeichen} " + ausgabe_string)
 
         elif cas == True and rounding == False:
-            print("x = " + ausgabe_string)
+            return ("x = " + ausgabe_string)
 
         elif rounding == True and not cas:
-            print(f"{ungefaehr_zeichen} " + ausgabe_string)
+            return (f"{ungefaehr_zeichen} " + ausgabe_string)
 
         else:
-            print("= " + ausgabe_string)
+            return ("= " + ausgabe_string)
 
 
+    except Overflow as e:
+        raise E.CalculationError(
+            message="Zahl zu groß (Rechen-Überlauf).",
+            code="3026",
+            equation=problem
+        )
+    except E.MathError as e:
+        e.equation = problem
+        raise e
 
-    except (ValueError, SyntaxError, ZeroDivisionError) as e:
+    except (ValueError, SyntaxError, ZeroDivisionError, TypeError, Exception) as e:
         error_message = str(e).strip()
-        cleaned_error_message = error_message
-
-        if error_message.lower().startswith("valueerror: "):
-            cleaned_error_message = error_message[len("ValueError: "):]
-        elif error_message.lower().startswith("syntaxerror: "):
-            cleaned_error_message = error_message[len("SyntaxError: "):]
-
-        parts = cleaned_error_message.split(maxsplit=1)
+        parts = error_message.split(maxsplit=1)
+        code = "9999"
+        message = error_message
 
         if parts and parts[0].isdigit() and len(parts[0]) == 4:
-            print(f"!!ERROR!! {error_message}")
-        else:
-            error_type = type(e).__name__
-            print(f"!!ERROR!! 9999 UNERWARTETER FEHLER ({error_type}): {error_message}")
+            code = parts[0]
+            if len(parts) > 1:
+                message = parts[1]
+        raise E.MathError(message=message, code=code, equation=problem)
 
-    sys.exit(0)
-
+def test_main():
+    print("Gebe das Problem ein: ")
+    problem = input()
+    ergebnis = calculate(problem)
+    print(ergebnis)
+    #test_main()
 
 
 if __name__ == "__main__":
-    debug = 0  # 1 = activated, 0 = deactivated
-    #time.sleep(100)
-    main()
+    test_main()
+
+
+
+
