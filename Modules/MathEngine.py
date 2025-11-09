@@ -574,6 +574,7 @@ def cleanup(ergebnis):
 
 
 def calculate(problem):
+    getcontext().prec = 50
     settings = config_manager.load_setting_value("all")
     var_list = []
     try:
