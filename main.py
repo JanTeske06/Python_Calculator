@@ -57,5 +57,11 @@ def main():
 
 
 if __name__ == "__main__":
-    check_files_exist()
+    is_running_as_exe = getattr(sys, 'frozen', False)
+
+    if not is_running_as_exe:
+        print("Entwickler-Modus: Prüfe Dateipfade...")
+        check_files_exist()
+    else:
+        print("Produktions-Modus (.exe) wird gestartet...")
     main()

@@ -1,6 +1,6 @@
 # MathEngine.py
 import sys
-from decimal import Decimal, getcontext
+from decimal import Decimal, getcontext, Overflow
 import fractions
 import inspect
 
@@ -69,9 +69,6 @@ def isolate_bracket(problem, b_anfang):
 
 class Number:
     def __init__(self, value):
-        # WICHTIGSTE ÄNDERUNG: Sicherstellen, dass Decimal() nicht mit einem float
-        # oder einem zu großen int konfrontiert wird, der intern ungenau wird.
-        # Explizite Konvertierung zu String ist die robusteste Lösung.
         if not isinstance(value, Decimal):
             value = str(value)
 
@@ -84,8 +81,6 @@ class Number:
         return (0, self.value)
 
     def __repr__(self):
-        # ZWEITE WICHTIGE ÄNDERUNG: Verwendung von .to_normal_string(),
-        # um die wissenschaftliche Notation in der Ausgabe (repr) zu verhindern.
         try:
             display_value = self.value.to_normal_string()
         except AttributeError:
@@ -248,9 +243,6 @@ def translator(problem):
 
         elif current_char == ",":
             full_problem.append(",")
-
-        # elif(current_char) in Science_Operations:
-        #     full_problem.append(ScienceCalculator(current_char))
 
         elif ((((current_char) == 's' or (current_char) == 'c' or (current_char) == 't' or (
         current_char) == 'l') and len(problem) - b >= 5) or
@@ -646,7 +638,12 @@ def calculate(problem):
             return ("= " + ausgabe_string)
 
 
-
+    except Overflow as e:
+        raise E.CalculationError(
+            message="Zahl zu groß (Rechen-Überlauf).",
+            code="3026",
+            equation=problem
+        )
     except E.MathError as e:
         e.equation = problem
         raise e

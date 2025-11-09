@@ -83,6 +83,7 @@ ERROR_MESSAGES = {
     "3023" : "Missing '()':", # +equation
     "3024" : "Invalid fraction",
     "3025" : "One of the sides is empty.",
+    "3026" : "Number too big.",
 
 
     "4700" : "Process already running",

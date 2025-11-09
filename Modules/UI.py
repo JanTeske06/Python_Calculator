@@ -646,19 +646,16 @@ class CalculatorPrototype(QtWidgets.QWidget):
         verfuegbare_breite = self.display.width() - padding
 
         text_breite = fm.horizontalAdvance(self.current_text)
-        if len(self.current_text) >= 55:
-            aktuelle_groesse = MIN_FONT_SIZE
 
-        else:
-            while text_breite > verfuegbare_breite and aktuelle_groesse >= MIN_FONT_SIZE:
+        while text_breite > verfuegbare_breite and aktuelle_groesse >= MIN_FONT_SIZE:
                 aktuelle_groesse -= 0.01
                 font.setPointSize(aktuelle_groesse)
                 fm = QtGui.QFontMetrics(font)
                 text_breite = fm.horizontalAdvance(self.current_text)
 
-            temp_size = aktuelle_groesse
+        temp_size = aktuelle_groesse
 
-            while temp_size <= MAX_FONT_SIZE:
+        while temp_size <= MAX_FONT_SIZE:
                 temp_size += 0.01
                 font.setPointSize(temp_size)
                 fm_temp = QtGui.QFontMetrics(font)
