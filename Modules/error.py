@@ -2,6 +2,32 @@
 
 
 
+
+class MathError(Exception):
+    def __init__(self, message, code="9999", equation=None):
+        super().__init__(message)
+        self.message = message
+        self.code = code
+        self.equation = equation
+
+class SyntaxError(MathError):
+    pass
+
+class CalculationError(MathError):
+    pass
+
+class SolverError(MathError):
+    pass
+
+
+
+
+
+
+
+
+
+
 Error_Dictionary= {
 
     "1" : "Missing Files",
