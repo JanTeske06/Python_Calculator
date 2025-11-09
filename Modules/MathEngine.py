@@ -392,7 +392,8 @@ def ast(received_string):
                     ScienceOp = f"{token}({argument_wert})"
                 ergebnis_string = ScientificEngine.unknown_function(ScienceOp)
                 try:
-                    berechneter_wert = fractions.Fraction(ergebnis_string)
+                    #berechneter_wert = fractions.Fraction(ergebnis_string)
+                    berechneter_wert = ergebnis_string
                     return Number(berechneter_wert)
                 except ValueError:
                     raise E.SyntaxError(f"Error in scientific function: {ergebnis_string}", code = "3218")
