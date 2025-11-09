@@ -1,8 +1,17 @@
 import sys
+import PySide6
+import PySide6
+import pyperclip
+import pynput
 from pathlib import Path
 from Modules import config_manager as config_manager, UI as UI
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+if getattr(sys, 'frozen', False):
+    PROJECT_ROOT = Path(sys._MEIPASS)
+else:
+    # WIR LAUFEN ALS .PY (normales Skript)
+    PROJECT_ROOT = Path(__file__).resolve().parent
+
 
 
 def check_files_exist():
