@@ -65,7 +65,7 @@ class Worker(QObject):
 
         except Exception as e:
             critical_error = E.MathError(
-                message=f"Unerwarteter Absturz: {e}",
+                message=f"Unexpected crash: {e}",
                 code="9999",
                 equation=self.daten
             )
@@ -119,7 +119,7 @@ class SettingsDialog(QtWidgets.QDialog):
                     self.widgets[key_value] = self.input_field_decimal
 
         else:
-            print("Error. Json Datein desynchronisiert.")
+            print("Error. JSON files desynchronized.")
 
 
 
@@ -162,14 +162,14 @@ class SettingsDialog(QtWidgets.QDialog):
                     try:
                         new_value_int = int(new_value_str)
                         if key_value == "decimal_places" and new_value_int < 2:
-                            raise ValueError(f"'{new_value_int}' ist zu klein. Minimum ist 2.")
+                            raise ValueError(f"'{new_value_int}' is too small. Minimum is 2.")
                         if old_value != new_value_int:
                             setting_value_list[key_value] = new_value_int
 
                     except ValueError as e:
                         print(f"Ungültige Eingabe: {e}")
                         QtWidgets.QMessageBox.critical(self, "Ungültige Eingabe",
-                                                       f"Fehler bei der Eingabe für '{key_value}':\n\n{e}\n\nBitte korrigiere deine Eingabe.")
+                                                       f"Error in input for '{key_value}':\n\n{e}\n\nPlease correct your input.")
 
                         return
             #print(f"Speichere neue Einstellungen: {setting_value_list}")
@@ -180,12 +180,12 @@ class SettingsDialog(QtWidgets.QDialog):
                 self.accept()
                 self.update_darkmode()
             else:
-                QtWidgets.QMessageBox.critical(self, "Fehler",
-                                               "Einstellungen konnten nicht gespeichert werden (Fehler in config_manager).")
+                QtWidgets.QMessageBox.critical(self, "Error",
+                                               "Settings could not be saved (error in config_manager).")
 
         except Exception as e:
             # Fängt alle anderen Fehler ab (z.B. widget nicht gefunden)
-            QtWidgets.QMessageBox.critical(self, "Fataler Fehler", f"Ein Fehler ist aufgetreten: {e}")
+            QtWidgets.QMessageBox.critical(self, "Fatal Error", f"An error has occurred: {e}")
 
 
 
@@ -550,12 +550,12 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 self.undo.append(self.redo.pop())
                 self.current_text = self.undo[-1]
                 self.display.setText(self.current_text)
-                print(f"Es wurde die Taste '{value}' gedrückt.")
+                print(f"The key '{value}' was pressed.")
             elif len(self.redo) > 0:
                 self.undo.append(self.redo.pop())
                 self.current_text = self.undo[-1]
                 self.display.setText(self.current_text)
-                print(f"Es wurde die Taste '{value}' gedrückt.")
+                print(f"The key '{value}' was pressed.")
 
 
         elif value == '📋':
@@ -600,7 +600,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
                         pass
                     elif response == True:
                         if self.thread_active:
-                            print("FEHLER: Eine Berechnung läuft bereits!")  # 4002
+                            print("ERROR: A calculation is already running!")  # 4002
                             return
                         else:
                             self.thread_active = True
@@ -627,7 +627,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
             self.undo.append(self.current_text)
             self.redo.clear()
 
-        print(f"Es wurde die Taste '{value}' gedrückt.")
+        print(f"The key '{value}' was pressed.")
 
     def update_font_size_display(self):
         self.current_text = self.display.text()
@@ -762,11 +762,11 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
             error_box = QtWidgets.QMessageBox(self)
             error_code = error_obj.code
-            additional_info = f"Details: {error_obj.message}\nGleichung: {error_obj.equation}"
+            additional_info = f"Details: {error_obj.message}\nEquation: {error_obj.equation}"
 
             error_box.setIcon(QtWidgets.QMessageBox.Critical)
-            error_box.setWindowTitle("Berechnungsfehler")
-            error_box.setText(f"Error {error_code}: {E.ERROR_MESSAGES.get(error_code, 'Unbekannter Fehler')}")
+            error_box.setWindowTitle("Calculation error")
+            error_box.setText(f"Error {error_code}: {E.ERROR_MESSAGES.get(error_code, 'Unknown error')}")
             error_box.setInformativeText(additional_info)
             error_box.setStandardButtons(QtWidgets.QMessageBox.Ok)
             error_box.setStyleSheet(self.get_message_box_stylesheet())
@@ -808,7 +808,6 @@ class CalculatorPrototype(QtWidgets.QWidget):
                     final_display_text = f"{equation} = {clean_result}"
 
         elif show_equation_setting== False:
-            print("x")
             is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
 
             if is_solver_result:

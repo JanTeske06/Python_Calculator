@@ -54,7 +54,7 @@ def isolate_bracket(problem, b_anfang):
     start = b_anfang
     start_klammer_index = problem.find('(', start)
     if start_klammer_index == -1:
-        raise E.SyntaxError(f"Mehrere Fehlende öffnende Klammer nach Funktionsnamen.", code="3000")
+        raise E.SyntaxError(f"Multiple missing opening parentheses after function name.", code="3000")
     b = start_klammer_index + 1
     bracket_count = 1
     while bracket_count != 0 and b < len(problem):
@@ -87,7 +87,7 @@ class Number:
             # Fallback für ältere Decimal-Versionen
             display_value = str(self.value)
 
-        return f"Nummer({display_value})"
+        return f"Number({display_value})"
 
 
 class Variable:
@@ -101,7 +101,7 @@ class Variable:
         if self.name == var_name:
             return (1, 0)
         else:
-            raise E.SolverError(f"Mehrere Variablen gefunden: {self.name}", code="3002")
+            raise E.SolverError(f"Multiple variables found: {self.name}", code="3002")
             return (0, 0)
 
     def __repr__(self):
@@ -128,13 +128,13 @@ class BinOp:
             return left_value ** right_value
         elif self.operator == '/':
             if right_value == 0:
-                raise E.CalculationError("Teilen durch Null", code = "3003")
+                raise E.CalculationError("Division by zero", code = "3003")
 
             return left_value / right_value
         elif self.operator == '=':
             return left_value == right_value
         else:
-            raise E.CalculationError(f"Unbekannter Operator: {self.operator}", code="3004")
+            raise E.CalculationError(f"Unknown operator: {self.operator}", code="3004")
 
     def collect_term(self, var_name):
         (left_faktor, left_konstante) = self.left.collect_term(var_name)
@@ -152,7 +152,7 @@ class BinOp:
 
         elif self.operator == '*':
             if left_faktor != 0 and right_faktor != 0:
-                raise E.SyntaxError("x^x Fehler.", code = "3005")
+                raise E.SyntaxError("x^x Error.", code = "3005")
 
             elif left_faktor == 0:
                 result_faktor = left_konstante * right_faktor
@@ -173,9 +173,9 @@ class BinOp:
         elif self.operator == '/':
             if right_faktor != 0:
 
-                raise E.SolverError("Nicht lineare Gleichung. (Teilen durch x)", code = "3006")
+                raise E.SolverError("Non-linear equation. (Division by x)", code = "3006")
             elif right_konstante == 0:
-                raise E.SolverError("Solver: Teilen durch Null", code="3003")
+                raise E.SolverError("Solver: Division by zero", code="3003")
             else:
                 result_faktor = left_faktor / right_konstante
                 result_konstante = left_konstante / right_konstante
@@ -185,14 +185,14 @@ class BinOp:
 
 
         elif self.operator == '^':
-            raise E.SolverError("Potenzen werden vom linearen Solver nicht unterstützt.", code = "3007")
+            raise E.SolverError("Powers are not supported by the linear solver.", code = "3007")
 
 
         elif self.operator == '=':
-            raise E.SolverError("Sollte nicht passieren: '=' innerhalb von collect_terms", code="3720")
+            raise E.SolverError("Should not happen: '=' inside collect\_terms", code="3720")
 
         else:
-            raise E.CalculationError(f"Unbekannter Operator: {self.operator}", code = "3004")
+            raise E.CalculationError(f"Unknown operator: {self.operator}", code = "3004")
 
     def __repr__(self):
         return f"BinOp({self.operator!r}, left={self.left}, right={self.right})"
@@ -216,7 +216,7 @@ def translator(problem):
             while (b + 1 <len(problem)) and (isInt(problem[b + 1]) or problem[b + 1] == "."):
                 if problem[b + 1] == ".":
                     if hat_schon_komma:
-                        raise E.SyntaxError("Doppeltes Kommazeichen.", code = "3008" )
+                        raise E.SyntaxError("Double comma sign.", code = "3008" )
                     hat_schon_komma = True
 
                 b += 1
@@ -265,9 +265,9 @@ def translator(problem):
                         full_problem.append('(')
                         b += 3
                     else:
-                        raise E.CalculationError(f"Fehlende Klammer nach: '{problem[b:b + 3]}", code = "3010")
+                        raise E.CalculationError(f"Missing parenthesis after: '{problem[b:b + 3]}", code = "3010")
                 elif len(problem) - b == 3 and problem[b:b + 3] in ['sin', 'cos', 'tan', 'log']:
-                    raise E.CalculationError(f"Fehlende Klammer nach: '{problem[b:b + 3]}", code="3023")
+                    raise E.CalculationError(f"Missing parenthesis after: '{problem[b:b + 3]}", code="3023")
 
 
 
@@ -279,7 +279,7 @@ def translator(problem):
                 berechneter_wert = Decimal(ergebnis_string)
                 full_problem.append(berechneter_wert)
             except ValueError:
-                raise E.CalculationError(f"Fehler bei Konstante π: {ergebnis_string}", code = "3219")
+                raise E.CalculationError(f"Error with constant π:{ergebnis_string}", code = "3219")
 
 
         else:
@@ -334,12 +334,12 @@ def ast(received_string):
     if analysed and analysed[0] == "=" and not "var0" in analysed:
         analysed.pop(0)
         if debug == True:
-            print("Gleichheitszeichen am Anfang entfernt.")
+            print("Equals sign removed at the beginning.")
 
     if analysed and analysed[-1] == "="and not "var0" in analysed:
         analysed.pop()
         if debug == True:
-            print("Gleichheitszeichen am Ende entfernt.")
+            print("Equals sign removed at the end.")
 
     if  ((analysed and analysed[-1] == "=") or (analysed and analysed[0] == "=")) and "var0" in analysed:
         raise E.CalculationError(f"{received_string}", code = "3025")
@@ -355,7 +355,7 @@ def ast(received_string):
             baum_in_der_klammer = parse_sum(tokens)
 
             if not tokens or tokens.pop(0) != ')':
-                raise E.SyntaxError("Fehlende schließende Klammer ')'", code = "3009")
+                raise E.SyntaxError("Missing closing parenthesis ')'", code = "3009")
 
             return baum_in_der_klammer
 
@@ -368,11 +368,11 @@ def ast(received_string):
                     berechneter_wert = Decimal(ergebnis)
                     return Number(berechneter_wert)
                 except ValueError:
-                    raise E.SyntaxError(f"Fehler bei Konstante π: {ergebnis}", code = "3219")
+                    raise E.SyntaxError(f"Error with constant π: {ergebnis}", code = "3219")
 
             else:
                 if not tokens or tokens.pop(0) != '(':
-                    raise E.SyntaxError(f"Fehlende öffnende Klammer nach Funktion {token}", code = "3010")
+                    raise E.SyntaxError(f"Missing opening parenthesis after function {token}", code = "3010")
 
                 argument_baum = parse_sum(tokens)
 
@@ -380,13 +380,13 @@ def ast(received_string):
                     tokens.pop(0)
                     basis_baum = parse_sum(tokens)
                     if not tokens or tokens.pop(0) != ')':
-                        raise E.SyntaxError(f"Fehlende schließende Klammer nach Logarithmusbasis.", code = "3009") #3009
+                        raise E.SyntaxError(f"Missing closing parenthesis after logarithm base.", code = "3009") #3009
                     argument_wert = argument_baum.evaluate()
                     basis_wert = basis_baum.evaluate()
                     ScienceOp = f"{token}({argument_wert},{basis_wert})"
                 else:
                     if not tokens or tokens.pop(0) != ')':
-                        raise E.SyntaxError(f"Fehlende schließende Klammer nach Funktion '{token}'", code = "3009") #3009
+                        raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code = "3009") #3009
 
                     argument_wert = argument_baum.evaluate()
                     ScienceOp = f"{token}({argument_wert})"
@@ -395,7 +395,7 @@ def ast(received_string):
                     berechneter_wert = fractions.Fraction(ergebnis_string)
                     return Number(berechneter_wert)
                 except ValueError:
-                    raise E.SyntaxError(f"Fehler bei wissenschaftlicher Funktion: {ergebnis_string}", code = "3218")
+                    raise E.SyntaxError(f"Error in scientific function: {ergebnis_string}", code = "3218")
 
         elif isinstance(token, Decimal):
             return Number(token)
@@ -409,7 +409,7 @@ def ast(received_string):
             return Variable(token)
 
         else:
-            raise E.SyntaxError(f"Unerwartetes Token: {token}", code = "3012") #3012
+            raise E.SyntaxError(f"Unexpected token: {token}", code = "3012") #3012
 
     def parse_unary(tokens):
             if tokens and tokens[0] in ('+', '-'):
@@ -481,7 +481,7 @@ def ast(received_string):
 
 
     if debug == True:
-        print("Finaler AST:")
+        print("Final AST:")
         print(finaler_baum)
 
     cas = locals().get('cas', False)
@@ -493,7 +493,7 @@ def ast(received_string):
 
 def solve(baum,var_name):
     if not isinstance(baum, BinOp) or baum.operator != '=':
-        raise E.SolverError("Keine gültige Gleichung zum Lösen.", code = "3012") #3012
+        raise E.SolverError("No valid equation to solve.", code = "3012") #3012
     (A, B) = baum.left.collect_term(var_name)
     (C, D) = baum.right.collect_term(var_name)
     nenner = A - C
@@ -534,7 +534,7 @@ def cleanup(ergebnis):
             return str(gekuerzter_bruch), rounding
 
         except Exception as e:
-            raise CalculationError(f"Warnung: Bruch-Umwandlung fehlgeschlagen: {e}", code = "3024")
+            raise E.CalculationError(f"Warning: Fraction conversion failed: {e}", code = "3024")
             pass
 
     if isinstance(ergebnis, Decimal):
@@ -597,18 +597,18 @@ def calculate(problem):
 
         else:
             if cas:
-                raise E.SolverError("Der Solver wurde auf einer Nicht-Gleichung", code = "3005")
+                raise E.SolverError("The solver was used on a non-equation", code = "3005")
             elif not cas and not "=" in problem:
-                raise E.SolverError("Kein '=' gefunden, obwohl eine Variable angegeben wurde.", code="3012")
+                raise E.SolverError("No '=' found, although a variable was specified.", code="3012")
 
 
             elif cas and "=" in problem and (
                     problem.index("=") == 0 or problem.index("=") == (len(problem) - 1)):
-                raise E.SolverError("Einer der Seiten ist leer: " + str(problem), code = "3022")
+                raise E.SolverError("One of the sides is empty: " + str(problem), code = "3022")
 
 
             else:
-                raise E.CalculationError("Der Taschenrechner wurde auf einer Gleichung aufgerufen.", code="3015")
+                raise E.CalculationError("The calculator was called on an equation.", code="3015")
 
             return
 
@@ -641,7 +641,7 @@ def calculate(problem):
 
     except Overflow as e:
         raise E.CalculationError(
-            message="Zahl zu groß (Rechen-Überlauf).",
+            message="Number too large (Arithmetic overflow).",
             code="3026",
             equation=problem
         )
@@ -662,7 +662,7 @@ def calculate(problem):
         raise E.MathError(message=message, code=code, equation=problem)
 
 def test_main():
-    print("Gebe das Problem ein: ")
+    print("Enter the problem: ")
     problem = input()
     ergebnis = calculate(problem)
     print(ergebnis)

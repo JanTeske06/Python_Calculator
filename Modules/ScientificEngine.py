@@ -43,7 +43,7 @@ def isSCT(problem):  # Sin / Cos / Tan
 
 
         else:
-            print("Error. Sin/Cos/tan wurde erkannt, aber konnte nicht zugeordnet werden.")
+            print("Error. Sin/Cos/tan was detected but could not be assigned.")
     else:
         return False
 
@@ -53,13 +53,13 @@ def isLog(problem):
         start_index = problem.find('(')
         end_index = problem.find(')')
         if start_index == -1 or end_index == -1 or start_index >= end_index:
-            return "FEHLER: Logarithmus-Syntax."
+            return "ERROR: Logarithm syntax."
 
         content = problem[start_index + 1: end_index]
 
         number = 0.0
         base = 0.0
-        ergebnis = "FEHLER: Unbekannter Logarithmusfehler."
+        ergebnis = "ERROR: Unknown logarithm error."
 
         try:
             if "," in content:
@@ -76,9 +76,9 @@ def isLog(problem):
                 ergebnis = math.log(number, base)
 
         except ValueError:
-            return "FEHLER: Ungültige Zahl oder Basis im Logarithmus."
+            return "ERROR: Invalid number or base in logarithm."
         except Exception as e:
-            return f"FEHLER: Logarithmus-Berechnung: {e}"
+            return f"ERROR: Logarithm calculation: {e}"
 
         return ergebnis
     else:
@@ -108,7 +108,7 @@ def isRoot(problem):
 
 
 def test_main():
-    print("Gebe das Problem ein: ")
+    print("Enter the problem: ")
     received_string = input()
 
     if received_string == "π" or received_string.lower() == "pi":
@@ -129,7 +129,7 @@ def test_main():
 
 
     else:
-        ergebnis = (f"Error. Konnte keine Operation zuordnen. Received String:" + str(received_string))
+        ergebnis = (f"Error. Could not assign an operation. Received String:" + str(received_string))
 
     print(ergebnis)
 

@@ -44,7 +44,7 @@ def check_files_exist():
             missing_files.append(file_path.name)
 
     if missing_files:
-        print("Fehler: Folgende Dateien fehlen oder sind am falschen Ort:")
+        print("Error: The following files are missing or in the wrong location:")
         for file_name in missing_files:
             print(f"- {file_name}")
         sys.exit(1)
@@ -60,8 +60,8 @@ if __name__ == "__main__":
     is_running_as_exe = getattr(sys, 'frozen', False)
 
     if not is_running_as_exe:
-        print("Entwickler-Modus: Prüfe Dateipfade...")
+        print("Developer Mode: Checking file paths...")
         check_files_exist()
     else:
-        print("Produktions-Modus (.exe) wird gestartet...")
+        print("Production mode (.exe) is starting...")
     main()
