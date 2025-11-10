@@ -1,3 +1,12 @@
+# Main.py
+""""" Entry point for the Advanced Python Calculator.
+
+   Responsibilities:
+   - Detect run mode (script vs PyInstaller.exe)
+   - Verify required files exist in development mode
+   - Load configuration and start the Qt GUI
+   
+"""""
 import sys
 import PySide6
 import PySide6
@@ -6,15 +15,26 @@ import pynput
 from pathlib import Path
 from Modules import config_manager as config_manager, UI as UI
 
+
+# Resolve project root depending on run mode (Script or .exe)
+
 if getattr(sys, 'frozen', False):
     PROJECT_ROOT = Path(sys._MEIPASS)
 else:
-    # WIR LAUFEN ALS .PY (normales Skript)
     PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 
 def check_files_exist():
+
+    """
+      Fail fast in development if required files are missing / moved / renamed.
+
+      Rationale:
+      - In dev: helpful, early error instead of a vague crash when UI/engine imports fail.
+      - In production (.exe): files are embedded by the bundler -> this check is skipped.
+    """
+
     modules_dir = PROJECT_ROOT / "Modules"
     UI_file = modules_dir / "UI.py"
     MathEngine_file = modules_dir / "MathEngine.py"
@@ -51,12 +71,21 @@ def check_files_exist():
 
 
 def main():
+
+    """
+    Load configuration and start the GUI.
+    - Keep this thin: no business logic here.
+    """
+
     all_settings = config_manager.load_setting_value("all")
     print("Config geladen:", all_settings)
+
+    # Delegate control to the UI layer; the UI owns the event loop.
     UI.main()
 
 
 if __name__ == "__main__":
+    # Two explicit modes aid debugging & packaging clarity.
     is_running_as_exe = getattr(sys, 'frozen', False)
 
     if not is_running_as_exe:

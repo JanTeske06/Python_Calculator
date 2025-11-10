@@ -1,9 +1,9 @@
 {
-    "decimal_places": 2,
+    "decimal_places": 49,
     "use_degrees": false,
     "darkmode": true,
     "after_paste_enter": false,
     "shift_to_copy": true,
-    "show_equation": true,
+    "show_equation": false,
     "fractions": true
 }
