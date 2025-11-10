@@ -4,6 +4,6 @@
     "darkmode": true,
     "after_paste_enter": false,
     "allow_augmented_assignment": true,
-    "show_equation": false,
+    "show_equation": true,
     "fractions": true
 }

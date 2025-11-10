@@ -40,10 +40,10 @@ import threading
 from pynput.keyboard import Controller
 import pyperclip
 import inspect
-from . import error as E                        # Imports Error.py as a module
+from collections import Counter
+from . import error as E  # Imports Error.py as a module
 from . import config_manager as config_manager  # Imports config_manager.py as a module
-from . import MathEngine as MathEngine          # Imports MathEngine.py as a module
-
+from . import MathEngine as MathEngine  # Imports MathEngine.py as a module
 
 # Resolve project root depending on run mode (Script or .exe)
 if getattr(sys, 'frozen', False):
@@ -53,17 +53,17 @@ else:
     # We are running in a normal Python environment (.py)
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-
+# New: supported augmented-assignment operator tokens (UI feature flag in settings controls behavior)
+augmented_assignment = ["+=", "*=", "/=", "-="]
 
 
 def boolean(value):
-
     """""
-    
+
     Simple helper function to check whether the value is a boolean or not.
-    
+
     Returns True or False, depending on the value of the boolean, or -1, if its neither.
-    
+
     """""
 
     if value == "True":
@@ -79,14 +79,12 @@ def get_line_number():
     return inspect.currentframe().f_back.f_lineno
 
 
-
 def is_shift_pressed():
-
     """""
-    
+
     Small and simple check, whether shift is pressed or not.
     Used for the "shift to copy" setting.
-    
+
     """""
 
     tastatur_controller = Controller()
@@ -94,7 +92,6 @@ def is_shift_pressed():
 
 
 class Worker(QObject):
-
     """""
 
     This Class is always a seperat thread, responsible for transmitting the problem to MathEngine.py
@@ -106,7 +103,7 @@ class Worker(QObject):
 
     def __init__(self, problem):
         super().__init__()
-        self.data = problem # Renamed from 'self.daten' for clarity
+        self.data = problem  # Renamed from 'self.daten' for clarity
 
     def run_Calc(self):
 
@@ -130,29 +127,24 @@ class Worker(QObject):
             critical_error = E.MathError(
                 message=f"Unexpected crash: {e}",
                 code="9999",
-                equation=self.data # Fixed typo from self.daten
+                equation=self.data  # Fixed typo from self.daten
             )
             self.job_finished.emit(critical_error, self.data)
 
 
-
-
-
 class SettingsDialog(QtWidgets.QDialog):
-
     """""
-    
+
     This class is responsible for managing the settings window, saving the new settings and opening and error
     message if something went wrong.
-    
+
     All of the Settings can be seperated into two categories:
     1. Checkboxes   (Managed with True or False)
     2. Input Fields (Managed as a String)
-    
+
     """""
 
-
-    settings_saved = Signal() # Signal to tell the main window to update
+    settings_saved = Signal()  # Signal to tell the main window to update
 
     def __init__(self, parent=None):
         """""
@@ -165,7 +157,6 @@ class SettingsDialog(QtWidgets.QDialog):
 
         super().__init__(parent)
         self.widgets = {}  # Dictionary, in which all of the Widgets (Setting options) are saved and stored.
-
 
         # --- 1. Window Setup ---
         self.setWindowTitle("Calculator Settings")
@@ -198,7 +189,7 @@ class SettingsDialog(QtWidgets.QDialog):
                     checkbox = QtWidgets.QCheckBox(description)
                     checkbox.setChecked(value)
                     main_layout.addWidget(checkbox)
-                    self.widgets[key_value] = checkbox # Store widget for later saving
+                    self.widgets[key_value] = checkbox  # Store widget for later saving
 
                 # --- 3b. Input Field Builder (for Integer settings) ---
                 elif MathEngine.isInt(value):
@@ -206,18 +197,16 @@ class SettingsDialog(QtWidgets.QDialog):
                     main_layout.addLayout(row_h_layout)
                     label = QtWidgets.QLabel(description + " (min. 2):")
                     input_field = QtWidgets.QLineEdit()
-                    input_field.setPlaceholderText(str(value)) # Show current value as placeholder
+                    input_field.setPlaceholderText(str(value))  # Show current value as placeholder
                     self.input_field_decimal = input_field
 
                     row_h_layout.addWidget(label)
                     row_h_layout.addWidget(self.input_field_decimal)
-                    row_h_layout.setStretch(1, 1) # Make input field expand
-                    self.widgets[key_value] = self.input_field_decimal # Store widget for later saving
+                    row_h_layout.setStretch(1, 1)  # Make input field expand
+                    self.widgets[key_value] = self.input_field_decimal  # Store widget for later saving
 
         else:
             print("Error. JSON files desynchronized.")
-
-
 
         # --- 4. OK / Cancel Buttons ---
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
@@ -233,14 +222,13 @@ class SettingsDialog(QtWidgets.QDialog):
         # Apply darkmode on initial load
         self.update_darkmode()
 
-
     def save_settings(self, setting_value_list):
         # --- 1. Save Settings Logic ---
         try:
             # Iterate over all widgets we created (Checkboxes, Input Fields)
             for key_value in self.widgets:
                 if key_value not in setting_value_list:
-                    continue # Skip if widget key isn't in settings
+                    continue  # Skip if widget key isn't in settings
 
                 widget = self.widgets[key_value]
 
@@ -250,7 +238,7 @@ class SettingsDialog(QtWidgets.QDialog):
                     new_value = widget.isChecked()
 
                     if setting_value_list[key_value] != new_value:
-                        #print(f"Changing {key_value} to {new_value}")
+                        # print(f"Changing {key_value} to {new_value}")
                         setting_value_list[key_value] = new_value
 
                 # --- 3. Handle Input Fields (like 'decimal_places') ---
@@ -281,16 +269,16 @@ class SettingsDialog(QtWidgets.QDialog):
                         QtWidgets.QMessageBox.critical(self, "Invalid Input:",
                                                        f"Error in input for '{key_value}':\n\n{e}\n\nPlease correct your input.")
 
-                        return # Stop saving!
+                        return  # Stop saving!
 
             # --- 6. Write to File ---
             # If all validations passed, save the updated dictionary to config.json
             gespeicherte_settings = config_manager.save_setting(setting_value_list)
 
             if gespeicherte_settings != {}:
-                self.settings_saved.emit() # Tell the main window to update
-                self.accept()              # Close the settings dialog
-                self.update_darkmode()     # Apply theme changes
+                self.settings_saved.emit()  # Tell the main window to update
+                self.accept()  # Close the settings dialog
+                self.update_darkmode()  # Apply theme changes
             else:
                 QtWidgets.QMessageBox.critical(self, "Error",
                                                "Settings could not be saved (error in config_manager).")
@@ -298,9 +286,6 @@ class SettingsDialog(QtWidgets.QDialog):
         except Exception as e:
             # Catch-all for any other unexpected error
             QtWidgets.QMessageBox.critical(self, "Fatal Error", f"An error has occurred: {e}")
-
-
-
 
     def update_darkmode(self):
         # Applies the darkmode stylesheet if the setting is True
@@ -312,19 +297,18 @@ class SettingsDialog(QtWidgets.QDialog):
                         QLineEdit {background-color: #444444;color: white;border: 1px solid #666666;}
                         QDialogButtonBox QPushButton {background-color: #666666;color: white;}""")
         else:
-            self.setStyleSheet("") # Revert to default stylesheet
+            self.setStyleSheet("")  # Revert to default stylesheet
 
 
 class CalculatorPrototype(QtWidgets.QWidget):
     # --- Class-level attributes for button hold logic ---
     display_font_size = 4.8
-    shift_is_held = False # Note: This is a class attribute, not instance
+    shift_is_held = False  # Note: This is a class attribute, not instance
     hold_timer = None
     initial_delay = 500
     repeat_interval = 100
     was_held = False
     held_button_value = None
-
 
     def __init__(self):
         super().__init__()
@@ -334,21 +318,23 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
         # --- 2. Instance State Variables ---
         # These are the "memory" of THIS calculator instance
-        self.thread_active = False     # Is a calculation running?
-        self.received_result = False   # Was the last text an answer?
-        self.first_run = True          # For font resizing logic
-        self.previous_equation = ""    # For "show_equation" logic
-        self.undo = ["0"]              # Undo stack
-        self.redo = []                 # Redo stack
-        self.hold_timer = QTimer(self) # Timer for button hold
+        self.equation = ""  # New: stores the last equation text (used with show_equation/augmented assignment UI features)
+        self.thread_active = False  # Is a calculation running?
+        self.received_result = False  # Was the last text an answer?
+        self.first_run = True  # For font resizing logic
+        self.previous_equation = ""  # For "show_equation" logic
+        self.undo = ["0"]  # Undo stack
+        self.redo = []  # Redo stack
+        self.hold_timer = QTimer(self)  # Timer for button hold
         self.hold_timer.timeout.connect(self.handle_hold_tick)
-        self.current_text = ""         # The text currently being built
+        self.current_text = ""  # The text currently being built
+        self.display_text = ""  # New: optional buffer for display-related features
 
         # --- 3. Window Setup ---
         icon_path = PROJECT_ROOT / "icons" / "icon.png"
         app_icon = QtGui.QIcon(str(icon_path))
         self.setWindowIcon(app_icon)
-        self.button_objects = {} # Dictionary to store button widgets
+        self.button_objects = {}  # Dictionary to store button widgets
         self.setWindowTitle("Calculator")
         self.resize(200, 450)
         main_v_layout = QtWidgets.QVBoxLayout(self)
@@ -368,11 +354,11 @@ class CalculatorPrototype(QtWidgets.QWidget):
         font.setPointSize(46)
         self.display.setFont(font)
         self.display.setSizePolicy(expanding_policy)
-        main_v_layout.addWidget(self.display, 1) # Add display with stretch factor 1
+        main_v_layout.addWidget(self.display, 1)  # Add display with stretch factor 1
 
         # --- 6. Button Grid Setup ---
         button_container = QtWidgets.QWidget()
-        main_v_layout.addWidget(button_container, 3) # Add container with stretch factor 3
+        main_v_layout.addWidget(button_container, 3)  # Add container with stretch factor 3
         button_grid = QtWidgets.QGridLayout(button_container)
         button_grid.setSpacing(0)
         button_grid.setContentsMargins(0, 0, 0, 0)
@@ -396,7 +382,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
         ]
 
         # Buttons that support "press and hold"
-        HOLD_BUTTONS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '↶','↷','<']
+        HOLD_BUTTONS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '↶', '↷', '<']
 
         # --- 8. Button Creation Loop ---
         for self.text, self.row, self.col in self.buttons:
@@ -420,16 +406,15 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 self.button.clicked.connect(lambda checked=False, val=self.text: self.handle_button_press(val))
 
             button_grid.addWidget(self.button, self.row, self.col)
-            self.button_objects[self.text] = self.button # Store button for later (e.g., update_return_button)
+            self.button_objects[self.text] = self.button  # Store button for later (e.g., update_return_button)
 
-        self.update_darkmode() # Apply darkmode on initial load
-
+        self.update_darkmode()  # Apply darkmode on initial load
 
     # --- Button Hold Logic ---
     def handle_button_pressed_hold(self, value):
-        self.was_held = False # Reset flag on new press
+        self.was_held = False  # Reset flag on new press
         self.held_button_value = value
-        self.hold_timer.setInterval(self.initial_delay) # Initial 500ms delay
+        self.hold_timer.setInterval(self.initial_delay)  # Initial 500ms delay
         self.hold_timer.start()
 
     def handle_button_released_hold(self):
@@ -478,53 +463,47 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 button_instance.setFont(font)
                 self.first_run = False
 
-        self.update_font_size_display() # Also update the display font
+        self.update_font_size_display()  # Also update the display font
 
     def update_button_labels(self):
+        """
+        New: Toggle the clipboard button label depending on Shift state.
+        - Shift held   → show 📑 (Paste)
+        - Shift up     → show 📋 (Copy)
+        This purely updates the label; actual behavior is handled in `handle_button_press`.
+        """
         if self.shift_is_held:
             paste_button = self.button_objects.get("📋")
             if paste_button:
                 paste_button.setText('📑')
-
-
         else:
             paste_button = self.button_objects.get('📋')
             if paste_button:
                 paste_button.setText('📋')
 
-
     def keyPressEvent(self, event):
-        # Detects if Shift key is held (for clipboard logic)
+        # New: when Shift is pressed, reflect Paste-mode on the clipboard button label
         if event.key() == Qt.Key.Key_Shift:
             self.shift_is_held = True
             self.update_button_labels()
         super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
+        # New: when Shift is released, return clipboard button label to Copy-mode
         if event.key() == Qt.Key.Key_Shift:
             self.shift_is_held = False
             self.update_button_labels()
         super().keyReleaseEvent(event)
 
-
-
-
-
     # --- MAIN BUTTON LOGIC ---
     # This is the "brain" of the calculator UI.
     def handle_button_press(self, value):
-        global first_run # Note: This is a global variable
-        global mein_thread # Note: This is a global variable
+        global first_run  # Note: This is a global variable
+        global mein_thread  # Note: This is a global variable
 
-        # --- 1. Get Current State ---
-        # Get the current text from the display before we modify it
-        self.current_text = self.display.text()
-
-        # --- 2. Handle Input After a Result (=) ---
-        # If a result is already shown (e.g., "= 4"), the next number
-        # should start a NEW calculation, not append to the old one.
-        if self.received_result == True and not value == "<":
-            self.received_result = False  # Reset the "result" flag
+        # --- 1. Handle Input After a Result (=) ---
+        # New: extract the last result using rindex so expressions like "12+=6 = 18" correctly pick "18".
+        if len(self.undo) >= 2 and not value == "<" and self.undo[-2] == "⏎":
             ungefaehr_zeichen = "\u2248"
             marker_to_find = ""
 
@@ -539,29 +518,31 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 marker_to_find = ungefaehr_zeichen
 
             # This logic extracts the *result* of the previous calculation
-            # to be used as the *start* of the new one (e.g., "5+5=10" -> "10")
+            # to be used as the *start* of the new one (e.g., "12+=6 = 18" -> "18")
             if marker_to_find != "":
                 try:
                     if marker_to_find != "|":
-                        marker_index = self.current_text.index(marker_to_find)
+                        # New: use rindex to get the last '=' or '≈' occurrence
+                        marker_index = self.current_text.rindex(marker_to_find)
                         start_index = marker_index + 1
-                        temp_new_text = self.current_text[start_index:]
-                        if temp_new_text.startswith(' '):
-                            temp_new_text = temp_new_text[1:]
+                        temp_new_text = self.current_text[start_index:].lstrip()
                         self.current_text = temp_new_text
+
                     elif marker_to_find == "|":
+                        # For solver results, keep the equation part before the pipe
                         marker_index = self.current_text.index(marker_to_find)
-                        start_index = marker_index -1
-                        temp_new_text = self.current_text[:start_index]
-                        if temp_new_text.startswith(' '):
-                            temp_new_text = temp_new_text[:1]
+                        temp_new_text = self.current_text[:marker_index].rstrip()
                         self.current_text = temp_new_text
+
                 except ValueError:
-                    pass # Ignore if marker wasn't found
+                    pass  # Ignore if marker wasn't found
 
         # Resets the display if the last result was a boolean
         if self.current_text.strip() == "False" or self.current_text.strip() == "True":
             self.current_text = "0"
+        #
+        # if self.setting_value_list["show_equation"] == True and self.setting_value_list["allow_augmented_assignment"] == True and self.equation != "":
+        #     self.display.setText(self.current_text)
 
         # --- 3. Handle Special Keys ---
 
@@ -588,26 +569,28 @@ class CalculatorPrototype(QtWidgets.QWidget):
                     # (e.g., "x=5 | ..." or "5+5=10")
                     print(self.undo)
                     print(str(get_line_number()))
-                    #self.current_text = "3=3 |  True"
+                    # self.current_text = "3=3 |  True"
                     if "x" in self.current_text:
                         if "|" in self.current_text:
                             print(str(get_line_number()))
-                            self.current_text = self.current_text[:self.current_text.index("|") -1]
+                            self.current_text = self.current_text[:self.current_text.index("|") - 1]
                         elif "=" in self.current_text:
                             print(str(get_line_number()))
                             self.current_text = self.current_text[self.current_text.index("=") + 1:]
                         elif "≈" in self.current_text:
                             print(str(get_line_number()))
                             self.current_text = self.current_text[self.current_text.index("≈") + 1:]
-                    elif "=" in self.current_text and (not "True" in self.current_text and not "False" in self.current_text):
+                    elif "=" in self.current_text and (
+                            not "True" in self.current_text and not "False" in self.current_text):
                         print(str(get_line_number()))
                         self.current_text = self.current_text[self.current_text.index("=") + 1:]
-                    elif "≈" in self.current_text and (not "True" in self.current_text and not "False" in self.current_text):
+                    elif "≈" in self.current_text and (
+                            not "True" in self.current_text and not "False" in self.current_text):
                         print(str(get_line_number()))
                         self.current_text = self.current_text[self.current_text.index("≈") + 1:]
                     elif "=" in self.current_text and ("True" in self.current_text or "False" in self.current_text):
                         print(str(get_line_number()))
-                        self.current_text = self.current_text[:self.current_text.index("|") -1]
+                        self.current_text = self.current_text[:self.current_text.index("|") - 1]
                     self.current_text = self.current_text + "0"
 
             # --- Smart Backspace Logic ---
@@ -620,7 +603,8 @@ class CalculatorPrototype(QtWidgets.QWidget):
             elif self.current_text.endswith("e^(") or self.current_text.endswith("sin") or self.current_text.endswith(
                     "cos") or self.current_text.endswith("tan") or self.current_text.endswith("log"):
                 self.current_text = self.current_text[:-3]
-            elif self.current_text.endswith("√(") or self.current_text.endswith("^(") or self.current_text.endswith("e^"):
+            elif self.current_text.endswith("√(") or self.current_text.endswith("^(") or self.current_text.endswith(
+                    "e^"):
                 self.current_text = self.current_text[:-2]
             else:
                 # --- Normal Backspace (delete one character) ---
@@ -633,7 +617,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
         elif (value == '⚙️'):
             # --- Settings Key ---
-            return # Logic is handled by self.open_settings, connected in __init__
+            return  # Logic is handled by self.open_settings, connected in __init__
 
         elif value == '⏎':
             # --- ⏎ (Enter/Calculate) Key ---
@@ -645,19 +629,21 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 return
             else:
                 self.thread_active = True
-                self.update_return_button() # Visually change ⏎ to X
+                self.update_return_button()  # Visually change ⏎ to X
 
             text_to_display = self.display.text()
             self.current_text = text_to_display
 
             # Logic to re-use previous result if "show_equation" is on
-            if self.setting_value_list["show_equation"]  == True and self.previous_equation and not "x" in self.current_text:
+            if self.setting_value_list[
+                "show_equation"] == True and self.previous_equation and not "x" in self.current_text:
                 is_original_equation = (self.current_text == self.previous_equation)
                 if not is_original_equation and not "x" in self.current_text:
                     value_part = None
                     if "|" in text_to_display:
                         value_part = text_to_display.split("|")[-1].strip()
-                    elif "=" in text_to_display:
+                    elif "=" in text_to_display and self.setting_value_list["allow_augmented_assignment"] == False:
+                        # New: respect setting to block augmented assignment reuse if disabled
                         value_part = text_to_display.split("=")[-1].strip()
                     elif "\u2248" in text_to_display:
                         value_part = text_to_display.split("\u2248")[-1].strip()
@@ -670,9 +656,9 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
             # --- 4. Start Worker Thread ---
             # We give the calculation job to the Worker to keep the UI from freezing
-            self.display.setText("...") # Show "..." to indicate loading
+            self.display.setText("...")  # Show "..." to indicate loading
             return_button = self.button_objects['⏎']
-            QtWidgets.QApplication.processEvents() # Force UI update *before* starting thread
+            QtWidgets.QApplication.processEvents()  # Force UI update *before* starting thread
 
             # --- Input Validation ---
             if not self.current_text.strip():
@@ -689,7 +675,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
             # Connect the worker's "finished" signal to our result handler
             worker_instanz.job_finished.connect(self.Calc_result)
-            return # IMPORTANT: Stop function here. Result will arrive via signal.
+            return  # IMPORTANT: Stop function here. Result will arrive via signal.
 
         elif value == '↶':
             # --- Undo Key ---
@@ -726,50 +712,39 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 self.display.setText(self.current_text)
                 print(f"The key '{value}' was pressed.")
 
-        elif value == '📋':
-            # --- Clipboard Key (Paste/Copy) ---
-
-            # --- Shift + 📋 = Copy ---
-            if self.shift_is_held and self.setting_value_list["shift_to_copy"] == True:
-                if '=' in self.current_text and not 'x' in self.current_text:
-                    # Smart copy: only copies the equation (e.g., "5+5=10" -> "5+510")
-                    # TODO: This copy logic seems buggy, might copy "5+510"
-                    equal = self.current_text.index("=")
-                    copy_text = self.current_text[:equal] + self.current_text[equal + 1:]
-                    pyperclip.copy(copy_text)
-                else:
-                    # Normal copy
-                    pyperclip.copy(self.current_text)
-
-            # --- 📋 = Paste ---
+        elif value == '📋' or value == '📑':
+            # New: single handler for clipboard button.
+            # - If Shift is held, interpret as Copy (📋) and copy current display.
+            # - Otherwise, interpret as Paste (📑) and insert clipboard text.
+            if self.shift_is_held:
+                pyperclip.copy(self.display.text())
             else:
                 clipboard = QtWidgets.QApplication.clipboard()
                 clipboard_text = clipboard.text()
 
-                # Clear solver/boolean results before pasting
+                # Clean solver/boolean decorations before pasting new content
                 if "x" in self.current_text or ("True" or "False") in self.current_text:
                     if "|" in self.current_text:
                         print(str(get_line_number()))
                         self.current_text = self.current_text[:self.current_text.index("|") - 1]
 
                 if clipboard_text:
-                    # Paste logic
+                    # Replace "0" or append to existing input
                     if self.current_text == "0":
                         self.current_text = clipboard_text
                     else:
                         self.current_text = self.current_text + clipboard_text
 
                     self.display.setText(self.current_text)
-                    self.undo.append(self.current_text) # Add paste to undo
+                    self.undo.append(self.current_text)
                     self.redo.clear()
 
-                    # --- "Auto-Enter" after Paste Setting ---
+                    # Optional auto-enter after paste (configurable)
                     response = self.setting_value_list["after_paste_enter"]
                     if response == False:
                         self.update_font_size_display()
                         pass
                     elif response == True:
-                        # Trigger calculation immediately after paste
                         if self.thread_active:
                             print("ERROR: A calculation is already running!")  # 4002
                             return
@@ -781,23 +756,29 @@ class CalculatorPrototype(QtWidgets.QWidget):
                             mein_thread = threading.Thread(target=worker_instanz.run_Calc)
                             mein_thread.start()
                             worker_instanz.job_finished.connect(self.Calc_result)
-                return
+            return
 
         else:
             # --- 5. Normal Keys (Numbers & Operators) ---
             # If "0" is shown, replace it (unless adding a decimal point)
             if self.current_text == "0" and value != ".":
                 self.current_text = ""
+
+            if len(self.undo) >= 2:
+                print(self.current_text)
+                if self.undo[-2] == "⏎" and self.setting_value_list["show_equation"] == True:
+                    self.display.setText(self.current_text)
+
             self.current_text += str(value)
             self.display.setText(self.current_text)
 
         # --- 6. Cleanup & State Update ---
-        self.update_font_size_display() # Adjust font size
+        self.update_font_size_display()  # Adjust font size
 
         # Save the new state to the undo stack
-        if value != '↶' and value != '↷' and value != '📋':
+        if value != '↶' and value != '↷' and value != '📋' and value != '📑':
             self.undo.append(self.current_text)
-            self.redo.clear() # Clear redo stack on new action
+            self.redo.clear()  # Clear redo stack on new action
 
         print(f"The key '{value}' was pressed.")
 
@@ -823,23 +804,23 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
         # --- Shrink font if too big ---
         while text_breite > verfuegbare_breite and aktuelle_groesse >= MIN_FONT_SIZE:
-                aktuelle_groesse -= 0.01
-                font.setPointSize(aktuelle_groesse)
-                fm = QtGui.QFontMetrics(font)
-                text_breite = fm.horizontalAdvance(self.current_text)
+            aktuelle_groesse -= 0.01
+            font.setPointSize(aktuelle_groesse)
+            fm = QtGui.QFontMetrics(font)
+            text_breite = fm.horizontalAdvance(self.current_text)
 
         # --- Grow font if too small ---
         temp_size = aktuelle_groesse
         while temp_size <= MAX_FONT_SIZE:
-                temp_size += 0.01
-                font.setPointSize(temp_size)
-                fm_temp = QtGui.QFontMetrics(font)
-                text_breite_temp = fm_temp.horizontalAdvance(self.current_text)
-                if text_breite_temp <= verfuegbare_breite:
-                    aktuelle_groesse = temp_size # This font size fits
-                else:
-                    temp_size -= 0.01 # The last one was too big
-                    break
+            temp_size += 0.01
+            font.setPointSize(temp_size)
+            fm_temp = QtGui.QFontMetrics(font)
+            text_breite_temp = fm_temp.horizontalAdvance(self.current_text)
+            if text_breite_temp <= verfuegbare_breite:
+                aktuelle_groesse = temp_size  # This font size fits
+            else:
+                temp_size -= 0.01  # The last one was too big
+                break
 
         # Apply the final calculated font size
         font.setPointSize(aktuelle_groesse)
@@ -865,7 +846,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
         # --- Apply Dark/Light Mode to all buttons ---
         if self.setting_value_list["darkmode"] == True:
             for text, button in self.button_objects.items():
-                if text != '⏎': # Don't override the special "Enter" button style
+                if text != '⏎':  # Don't override the special "Enter" button style
                     button.setStyleSheet("background-color: #121212; color: white; font-weight: bold;")
                     button.update()
                 if text == '⏎':
@@ -880,7 +861,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
             # --- Apply Light Mode ---
             for text, button in self.button_objects.items():
                 if text != '⏎':
-                    button.setStyleSheet("font-weight: normal;") # Revert to default
+                    button.setStyleSheet("font-weight: normal;")  # Revert to default
                     button.update()
                 if text == '⏎':
                     # Re-apply the correct "Enter" button style (blue or red)
@@ -893,7 +874,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
     def open_settings(self):
         # --- Open Settings Dialog ---
         settings_dialog = SettingsDialog(self)
-        settings_dialog.exec() # "exec" makes the dialog modal (blocks main window)
+        settings_dialog.exec()  # "exec" makes the dialog modal (blocks main window)
 
         # --- Reload settings after dialog closes ---
         # This ensures changes (like darkmode) are applied
@@ -923,19 +904,20 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 }
             """
         else:
-            return "" # Use default stylesheet in light mode
+            return ""  # Use default stylesheet in light mode
 
     def Calc_result(self, ergebnis, equation):
         # --- 1. Handle Calculation Result ---
         # This function is called by the Worker's "job_finished" signal
         self.received_result = True
-        self.thread_active = False # Thread is no longer active
+        self.thread_active = False  # Thread is no longer active
 
         if equation.endswith('=') and self.setting_value_list["show_equation"] == True:
-            equation = equation[:-1]
+            # New: store the equation (without trailing '=') for subsequent UI features
+            self.equation = equation[:-1]
 
-        print(ergebnis) # Log the raw result
-        self.update_return_button() # Change "X" back to "⏎"
+        print(ergebnis)  # Log the raw result
+        self.update_return_button()  # Change "X" back to "⏎"
 
         # --- 2. Handle MathError Object ---
         # If the worker sent back a MathError object...
@@ -959,7 +941,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
             # Show the original (failed) equation
             self.display.setText(equation)
             self.update_font_size_display()
-            return # Stop here
+            return  # Stop here
 
         # --- 3. Handle Successful Result (String) ---
         math_engine_output = ergebnis.strip()
@@ -972,17 +954,17 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
         # --- 4a. Boolean Result (e.g., "5=5") ---
         if (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == True:
-            math_engine_output = math_engine_output[math_engine_output.index("=")+1:]
+            math_engine_output = math_engine_output[math_engine_output.index("=") + 1:]
             final_display_text = f"{equation} | {math_engine_output}"
-        elif(math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == False:
-            math_engine_output = math_engine_output[math_engine_output.index("=")+1:]
+        elif (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == False:
+            math_engine_output = math_engine_output[math_engine_output.index("=") + 1:]
             final_display_text = f"{math_engine_output}"
 
         # --- 4b. Solver or Calculation Result (Show Equation = ON) ---
         elif show_equation_setting == True:
             is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
             if is_solver_result:
-                final_display_text = f"{equation} | {math_engine_output}" # e.g., "5x=10 | x = 2"
+                final_display_text = f"{equation} | {math_engine_output}"  # e.g., "5x=10 | x = 2"
             else:
                 clean_result = math_engine_output
                 # Strip the prefix (= or ≈) from the engine output
@@ -991,39 +973,39 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
                 # Re-add the correct prefix *after* the equation
                 if math_engine_output.startswith("\u2248"):
-                    final_display_text = f"{equation} {math_engine_output}" # e.g., "1/3 ≈ 0.33"
+                    final_display_text = f"{equation} {math_engine_output}"  # e.g., "1/3 ≈ 0.33"
                 else:
-                    final_display_text = f"{equation} = {clean_result}" # e.g., "5+5 = 10"
+                    final_display_text = f"{equation} = {clean_result}"  # e.g., "5+5 = 10"
 
         # --- 4c. Solver or Calculation Result (Show Equation = OFF) ---
-        elif show_equation_setting== False:
+        elif show_equation_setting == False:
             is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
             if is_solver_result:
-                final_display_text = f"{equation} | {math_engine_output}" # Still show equation for solver
+                final_display_text = f"{equation} | {math_engine_output}"  # Still show equation for solver
             else:
                 clean_result = math_engine_output
                 # Just show the result
                 if math_engine_output.startswith("\u2248"):
-                    final_display_text = f"{clean_result}" # e.g., "≈ 0.33"
+                    final_display_text = f"{clean_result}"  # e.g., "≈ 0.33"
                 else:
-                    final_display_text = f"{clean_result}" # e.g., "10"
+                    final_display_text = f"{clean_result}"  # e.g., "10"
         else:
-            final_display_text = math_engine_output # Fallback
+            final_display_text = math_engine_output  # Fallback
 
         # --- 5. Update Display and Undo Stack ---
         self.display.setText(final_display_text)
 
         # Add the result to the undo stack
         if final_display_text != self.undo[-1]:
-            self.undo.append('⏎') # Add a "marker" to show this was a calculation
+            self.undo.append('⏎')  # Add a "marker" to show this was a calculation
             self.undo.append(final_display_text)
-            self.redo.clear() # Clear redo stack
+            self.redo.clear()  # Clear redo stack
 
         self.update_font_size_display()
 
         print("undo: " + str(self.undo))
         print("redo: " + str(self.redo))
-        self.previous_equation = equation # Remember this equation
+        self.previous_equation = equation  # Remember this equation
 
 
 def main():
@@ -1032,6 +1014,7 @@ def main():
     window = CalculatorPrototype()
     window.show()
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     # --- Start the app if this file is run directly ---

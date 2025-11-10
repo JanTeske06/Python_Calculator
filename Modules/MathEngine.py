@@ -398,6 +398,10 @@ def translator(problem):
 def ast(received_string, settings):
     """Parse a token stream into an AST.
     Implements precedence via nested functions: factor → unary → power → term → sum → equation.
+
+    NEW: `settings` is used to control UI-driven parsing behavior (e.g. allowing
+    augmented assignment patterns like `12+=6`):
+      - settings["allow_augmented_assignment"] → influences pre-parse validation/rewrites.
     """
     analysed, var_counter = translator(received_string)
 
@@ -412,44 +416,50 @@ def ast(received_string, settings):
         if debug == True:
             print("Equals sign removed at the end.")
 
-    # Check if the first character is Division / Multiplication
+    # NEW: Guard against starting with '*' or '/' which implies a missing left operand.
     if analysed and (analysed[0] == "*" or analysed[0] == "/"):
         raise E.CalculationError("Missing Number.", code = "3028")
 
+    # NEW: Additional pre-parse validations / rewrites to support augmented assignment.
     if analysed:
         b = 0
 
         while b < len(analysed)-1:
 
-            # Case 1: '=' follows directly after an operator
-            # Example: "+=" or "*=" → invalid, missing number before '='
+            # Case 1: operator directly followed by '=' (e.g., "+=") without AA allowed → error
             if (len(analysed) != b + 1) and (analysed[b + 1] == "=" and (analysed[b] in Operations)) and (settings["allow_augmented_assignment"] == False):
                 raise E.CalculationError("Missing Number before '='.", code="3028")
 
+            # Case 1a (NEW): If AA is allowed and there is NO variable in the expression,
+            # rewrite "A += B" into "A = (A + B)":
+            #   - insert '(' after '='
+            #   - append ')' at the end
+            #   - remove the original '=' right after operator (so it becomes an infix '=')
             elif((len(analysed) != b + 1 or len(analysed) != b + 2 ) and (analysed[b + 1] == "=" and (analysed[b] in Operations)) and (settings["allow_augmented_assignment"] == True) and not "var0" in analysed):
-                    analysed.insert(b, ")")
-                    analysed.insert(0, "(")
-                    analysed.pop(b+3)
+                    analysed.append(")")
+                    analysed.insert(b+2, "(")
+                    analysed.pop(b+1)
 
+            # Case 1b (NEW): If AA is attempted while variables exist, forbid it
+            # to avoid ambiguous solver semantics.
             elif ((len(analysed) != b + 1 or len(analysed) != b + 2) and (
                     analysed[b + 1] == "=" and (analysed[b] in Operations)) and (
                           settings["allow_augmented_assignment"] == True) and "var0" in analysed):
                 raise E.CalculationError("Augmented assignment not allowed with variables.", code="3030")
-            # Case 2: '=' precedes an operator
-            # Example: "=+" or "=*" → invalid, missing number after '='
+
+            # Case 2: '=' precedes an operator (e.g., "=+") → number missing after '='
             elif (b > 0) and (analysed[b + 1] == "=" and (analysed[b] in Operations)):
                 raise E.CalculationError("Missing Number after '='.", code="3028")
 
+            # NEW: Expression ends with an operator → explicit "missing number" after that operator.
             elif analysed[-1] in Operations:
                 raise E.CalculationError(f"Missing Number after {analysed[-1]}", code="3029")
 
+            # NEW: operator followed by '=' (AA disabled) and no variables → still "missing number after <op>"
             elif (analysed[b] in Operations and (analysed[b + 1] == "=" and (settings["allow_augmented_assignment"] == False))) and not "var0" in analysed:
                 raise E.CalculationError(f"Missing Number after {analysed[b]}", code="3029")
 
-
             b += 1
-
-
 
     # '=' at start/end while a variable exists → malformed equation
     if  ((analysed and analysed[-1] == "=") or (analysed and analysed[0] == "=")) and "var0" in analysed:
@@ -464,8 +474,8 @@ def ast(received_string, settings):
         """Numbers, variables, sub-expressions in '()', and scientific functions."""
         if len(tokens) > 0:
             token = tokens.pop(0)
-
         else:
+            # NEW: explicit "missing number" when a factor is required but tokens are exhausted.
             raise E.CalculationError(f"Missing Number.", code = "3027")
 
         # Parenthesized sub-expression
@@ -734,10 +744,10 @@ def calculate(problem):
     """Main API: parse → (evaluate | solve | equality-check) → format → render string."""
     # Guard precision locally before each calculation (UI may adjust as well)
     getcontext().prec = 50
-    settings = config_manager.load_setting_value("all")
+    settings = config_manager.load_setting_value("all")  # NEW: pass UI settings down to parser
     var_list = []
     try:
-        finaler_baum, cas, var_counter = ast(problem, settings)
+        finaler_baum, cas, var_counter = ast(problem, settings)  # NEW: settings param enables AA handling
 
         # Decide evaluation mode
         if cas and var_counter > 0:
