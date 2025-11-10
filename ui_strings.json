@@ -3,7 +3,7 @@
   "use_degrees": "Angles in degrees (°)",
   "darkmode": "Dark Mode",
   "after_paste_enter": "Automatically calculate after paste (📋)",
-  "shift_to_copy": "Shift + 📋 to copy",
+  "allow_augmented_assignment": "Allow operator shorthand (e.g., +=, *=)",
   "show_equation": "Show equation with result",
   "fractions": "Display results as fractions"
 }

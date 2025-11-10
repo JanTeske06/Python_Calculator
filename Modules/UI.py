@@ -480,16 +480,35 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
         self.update_font_size_display() # Also update the display font
 
+    def update_button_labels(self):
+        if self.shift_is_held:
+            paste_button = self.button_objects.get("📋")
+            if paste_button:
+                paste_button.setText('📑')
+
+
+        else:
+            paste_button = self.button_objects.get('📋')
+            if paste_button:
+                paste_button.setText('📋')
+
+
     def keyPressEvent(self, event):
         # Detects if Shift key is held (for clipboard logic)
         if event.key() == Qt.Key.Key_Shift:
             self.shift_is_held = True
+            self.update_button_labels()
         super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key.Key_Shift:
             self.shift_is_held = False
+            self.update_button_labels()
         super().keyReleaseEvent(event)
+
+
+
+
 
     # --- MAIN BUTTON LOGIC ---
     # This is the "brain" of the calculator UI.

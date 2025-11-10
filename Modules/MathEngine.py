@@ -395,7 +395,7 @@ def translator(problem):
 # Parser (recursive descent)
 # -----------------------------
 
-def ast(received_string):
+def ast(received_string, settings):
     """Parse a token stream into an AST.
     Implements precedence via nested functions: factor → unary → power → term → sum → equation.
     """
@@ -412,6 +412,45 @@ def ast(received_string):
         if debug == True:
             print("Equals sign removed at the end.")
 
+    # Check if the first character is Division / Multiplication
+    if analysed and (analysed[0] == "*" or analysed[0] == "/"):
+        raise E.CalculationError("Missing Number.", code = "3028")
+
+    if analysed:
+        b = 0
+
+        while b < len(analysed)-1:
+
+            # Case 1: '=' follows directly after an operator
+            # Example: "+=" or "*=" → invalid, missing number before '='
+            if (len(analysed) != b + 1) and (analysed[b + 1] == "=" and (analysed[b] in Operations)) and (settings["allow_augmented_assignment"] == False):
+                raise E.CalculationError("Missing Number before '='.", code="3028")
+
+            elif((len(analysed) != b + 1 or len(analysed) != b + 2 ) and (analysed[b + 1] == "=" and (analysed[b] in Operations)) and (settings["allow_augmented_assignment"] == True) and not "var0" in analysed):
+                    analysed.insert(b, ")")
+                    analysed.insert(0, "(")
+                    analysed.pop(b+3)
+
+            elif ((len(analysed) != b + 1 or len(analysed) != b + 2) and (
+                    analysed[b + 1] == "=" and (analysed[b] in Operations)) and (
+                          settings["allow_augmented_assignment"] == True) and "var0" in analysed):
+                raise E.CalculationError("Augmented assignment not allowed with variables.", code="3030")
+            # Case 2: '=' precedes an operator
+            # Example: "=+" or "=*" → invalid, missing number after '='
+            elif (b > 0) and (analysed[b + 1] == "=" and (analysed[b] in Operations)):
+                raise E.CalculationError("Missing Number after '='.", code="3028")
+
+            elif analysed[-1] in Operations:
+                raise E.CalculationError(f"Missing Number after {analysed[-1]}", code="3029")
+
+            elif (analysed[b] in Operations and (analysed[b + 1] == "=" and (settings["allow_augmented_assignment"] == False))) and not "var0" in analysed:
+                raise E.CalculationError(f"Missing Number after {analysed[b]}", code="3029")
+
+
+            b += 1
+
+
+
     # '=' at start/end while a variable exists → malformed equation
     if  ((analysed and analysed[-1] == "=") or (analysed and analysed[0] == "=")) and "var0" in analysed:
         raise E.CalculationError(f"{received_string}", code = "3025")
@@ -427,7 +466,7 @@ def ast(received_string):
             token = tokens.pop(0)
 
         else:
-            raise E.CalculationError("", code = "3027")
+            raise E.CalculationError(f"Missing Number.", code = "3027")
 
         # Parenthesized sub-expression
         if token == "(":
@@ -630,55 +669,40 @@ def cleanup(ergebnis):
         except Exception as e:
             # Surface as CalculationError (preserves UI error handling)
             raise E.CalculationError(f"Warning: Fraction conversion failed: {e}", code = "3024")
-            pass  # Unreachable; kept intentionally
 
-    # Decimal rounding/normalization path
     if isinstance(ergebnis, Decimal):
 
         # --- Smarter Rounding Logic ---
+        #
+        # Handles rounding for Decimal results with dynamic precision.
+        # Integers are returned as-is (just normalized),
+        # while non-integers are rounded to 'target_decimals'.
+        #
+        # A temporary precision boost (prec=128) prevents
+        # Decimal.InvalidOperation during quantize() for long or repeating numbers.
+        # After rounding, precision is reset to the global standard (50).
+        #
+
         if ergebnis % 1 == 0:
-            # (Dein Code für Ganzzahlen - der ist perfekt)
+            # Integer result – return normalized without rounding
             return ergebnis.normalize(), rounding
-
-
         else:
-
-            # --- It's NOT an integer (e.g., 1/3 or 444.../9) ---
-
-            # --- FIX for InvalidOperation Bug ---
-
-            # Our main precision is 50, but quantize() needs more space
-
-            # to build the number *before* rounding.
-
-            # We temporarily "unfold the workbench" to 128.
-
-            getcontext().prec = 128
-
-            # --- End of FIX ---
-
-            # Now we can safely round it to the target decimals.
+            # Non-integer result (e.g. 1/3 or repeating decimals)
+            getcontext().prec = 128  # Prevent quantize overflow
 
             if target_decimals >= 0:
-
                 rundungs_muster = Decimal('1e-' + str(target_decimals))
-
             else:
-
                 rundungs_muster = Decimal('1')
 
             gerundetes_ergebnis = ergebnis.quantize(rundungs_muster)
-
-            # --- IMPORTANT ---
-
-            # Fold the workbench back to our golden standard!
-
-            getcontext().prec = 50
+            getcontext().prec = 50  # Restore standard precision
 
             if gerundetes_ergebnis != ergebnis:
                 rounding = True
 
             return gerundetes_ergebnis.normalize(), rounding
+
 
     # Legacy float/int handling (in case evaluation produced non-Decimal)
     elif isinstance(ergebnis, (int, float)):
@@ -713,7 +737,7 @@ def calculate(problem):
     settings = config_manager.load_setting_value("all")
     var_list = []
     try:
-        finaler_baum, cas, var_counter = ast(problem)
+        finaler_baum, cas, var_counter = ast(problem, settings)
 
         # Decide evaluation mode
         if cas and var_counter > 0:

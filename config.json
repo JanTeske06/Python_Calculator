@@ -3,7 +3,7 @@
     "use_degrees": false,
     "darkmode": true,
     "after_paste_enter": false,
-    "shift_to_copy": true,
+    "allow_augmented_assignment": true,
     "show_equation": false,
     "fractions": true
 }

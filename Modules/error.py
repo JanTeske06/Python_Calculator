@@ -111,6 +111,9 @@ ERROR_MESSAGES = {
     "3025": "One of the sides is empty.",
     "3026": "Number too big.",
     "3027": "Missing Number after an operator",
+    "3028": "Missing Number before an operator",
+    "3029": "Missing Operator",
+    "3030": "Augmented assignment not allowed with variables.",
 
     # 4xxx — UI/settings/runtime integration
     "4700": "Process already running",
