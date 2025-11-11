@@ -1,5 +1,5 @@
 # MathEngine.py
-"""""
+"""
 Core calculation engine for the Advanced Python Calculator.
 
 Pipeline
@@ -10,7 +10,7 @@ Pipeline
    - Evaluate pure numeric expressions
    - Solve linear equations with a single variable (e.g. 'x')
 4) Formatter: renders results using Decimal/Fraction and user preferences.
-"""""
+"""
 
 import sys
 from decimal import Decimal, getcontext, Overflow
@@ -25,8 +25,8 @@ from . import error as E
 debug = True
 
 # Supported operators / functions (kept as simple lists for quick membership checks)
-Operations = ["+","-","*","/","=","^"]
-Science_Operations = ["sin","cos","tan","10^x","log","e^", "π", "√"]
+Operations = ["+", "-", "*", "/", "=", "^"]
+Science_Operations = ["sin", "cos", "tan", "10^x", "log", "e^", "π", "√"]
 
 # Global Decimal precision used by this module (UI may also enforce this before calls)
 getcontext().prec = 50
@@ -41,49 +41,50 @@ def get_line_number():
     return inspect.currentframe().f_back.f_lineno
 
 
-def isInt(zahl):
+def isInt(number_str):
     """Return True if the given string can be parsed as int; else False."""
     try:
-        x = int(zahl)
+        x = int(number_str)
         return True
     except ValueError:
         return False
 
-def isfloat(zahl):
+
+def isfloat(number_str):
     """Return True if the given string can be parsed as float; else False.
     Note: tokenization may probe with float; evaluation uses Decimal.
     """
     try:
-        x = float(zahl)
+        x = float(number_str)
         return True
     except ValueError:
         return False
 
 
-def isScOp(zahl):
+def isScOp(token):
     """Return index of a known scientific operation or -1 if unknown."""
     try:
-        return Science_Operations.index(zahl)
+        return Science_Operations.index(token)
     except ValueError:
         return -1
 
 
-def isOp(zahl):
+def isOp(token):
     """Return index of a known basic operator or -1 if unknown."""
     try:
-        return Operations.index(zahl)
+        return Operations.index(token)
     except ValueError:
         return -1
 
 
-def isolate_bracket(problem, b_anfang):
-    """Return substring from the opening '(' at/after b_anfang up to its matching ')'.
+def isolate_bracket(problem, start_pos):
+    """Return substring from the opening '(' at/after start_pos up to its matching ')'.
 
     This walks forward and counts parentheses depth; raises on missing '('.
     Returns:
         (substring_including_brackets, position_after_closing_paren)
     """
-    start = b_anfang
+    start = start_pos
     start_klammer_index = problem.find('(', start)
     if start_klammer_index == -1:
         raise E.SyntaxError(f"Multiple missing opening parentheses after function name.", code="3000")
@@ -95,8 +96,8 @@ def isolate_bracket(problem, b_anfang):
         elif problem[b] == ')':
             bracket_count -= 1
         b += 1
-    ergebnis = problem[start:b]
-    return (ergebnis, b)
+    result = problem[start:b]
+    return (result, b)
 
 
 # -----------------------------
@@ -105,6 +106,7 @@ def isolate_bracket(problem, b_anfang):
 
 class Number:
     """AST node for numeric literal backed by Decimal."""
+
     def __init__(self, value):
         # Always normalize input to Decimal via string to avoid float artifacts
         if not isinstance(value, Decimal):
@@ -131,6 +133,7 @@ class Number:
 
 class Variable:
     """AST node representing a single symbolic variable (e.g. 'var0')."""
+
     def __init__(self, name):
         self.name = name
 
@@ -153,6 +156,7 @@ class Variable:
 
 class BinOp:
     """AST node for a binary operation: left <operator> right."""
+
     def __init__(self, left, operator, right):
         self.left = left
         self.operator = operator
@@ -173,7 +177,7 @@ class BinOp:
             return left_value ** right_value
         elif self.operator == '/':
             if right_value == 0:
-                raise E.CalculationError("Division by zero", code = "3003")
+                raise E.CalculationError("Division by zero", code="3003")
             return left_value / right_value
         elif self.operator == '=':
             # Equality is evaluated to a boolean (used for "= True/False" responses)
@@ -186,64 +190,64 @@ class BinOp:
 
         Only linear combinations are allowed; non-linear forms raise Solver/Syntax errors.
         """
-        (left_faktor, left_konstante) = self.left.collect_term(var_name)
-        (right_faktor, right_konstante) = self.right.collect_term(var_name)
+        (left_factor, left_constant) = self.left.collect_term(var_name)
+        (right_factor, right_constant) = self.right.collect_term(var_name)
 
         if self.operator == '+':
-            result_faktor = left_faktor + right_faktor
-            result_konstante = left_konstante + right_konstante
-            return (result_faktor, result_konstante)
+            result_factor = left_factor + right_factor
+            result_constant = left_constant + right_constant
+            return (result_factor, result_constant)
 
         elif self.operator == '-':
-            result_faktor = left_faktor - right_faktor
-            result_konstante = left_konstante - right_konstante
-            return (result_faktor, result_konstante)
+            result_factor = left_factor - right_factor
+            result_constant = left_constant - right_constant
+            return (result_factor, result_constant)
 
         elif self.operator == '*':
             # Only constant * (A*x + B) is allowed. (A*x + B)*(C*x + D) would be non-linear.
-            if left_faktor != 0 and right_faktor != 0:
-                raise E.SyntaxError("x^x Error.", code = "3005")
+            if left_factor != 0 and right_factor != 0:
+                raise E.SyntaxError("x^x Error.", code="3005")
 
-            elif left_faktor == 0:
+            elif left_factor == 0:
                 # B * (C*x + D) = (B*C)*x + (B*D)
-                result_faktor = left_konstante * right_faktor
-                result_konstante = left_konstante * right_konstante
-                return (result_faktor, result_konstante)
+                result_factor = left_constant * right_factor
+                result_constant = left_constant * right_constant
+                return (result_factor, result_constant)
 
-            elif right_faktor == 0:
+            elif right_factor == 0:
                 # (A*x + B) * D = (A*D)*x + (B*D)
-                result_faktor = right_konstante * left_faktor
-                result_konstante = right_konstante * left_konstante
-                return (result_faktor, result_konstante)
+                result_factor = right_constant * left_factor
+                result_constant = right_constant * left_constant
+                return (result_factor, result_constant)
 
-            elif left_faktor == 0 and right_faktor == 0:
+            elif left_factor == 0 and right_factor == 0:
                 # Pure constant multiplication
-                result_faktor = 0
-                result_konstante = right_konstante * left_konstante
-                return (result_faktor, result_konstante)
+                result_factor = 0
+                result_constant = right_constant * left_constant
+                return (result_factor, result_constant)
 
         elif self.operator == '/':
             # (A*x + B) / D is allowed; division by (C*x + D) is non-linear
-            if right_faktor != 0:
-                raise E.SolverError("Non-linear equation. (Division by x)", code = "3006")
-            elif right_konstante == 0:
+            if right_factor != 0:
+                raise E.SolverError("Non-linear equation. (Division by x)", code="3006")
+            elif right_constant == 0:
                 raise E.SolverError("Solver: Division by zero", code="3003")
             else:
                 # (A*x + B) / D = (A/D)*x + (B/D)
-                result_faktor = left_faktor / right_konstante
-                result_konstante = left_konstante / right_konstante
-                return (result_faktor, result_konstante)
+                result_factor = left_factor / right_constant
+                result_constant = left_constant / right_constant
+                return (result_factor, result_constant)
 
         elif self.operator == '^':
             # Powers generate non-linear terms (e.g., x^2)
-            raise E.SolverError("Powers are not supported by the linear solver.", code = "3007")
+            raise E.SolverError("Powers are not supported by the linear solver.", code="3007")
 
         elif self.operator == '=':
             # '=' only belongs at the root for solving; not inside collection
             raise E.SolverError("Should not happen: '=' inside collect_terms", code="3720")
 
         else:
-            raise E.CalculationError(f"Unknown operator: {self.operator}", code = "3004")
+            raise E.CalculationError(f"Unknown operator: {self.operator}", code="3004")
 
     def __repr__(self):
         return f"BinOp({self.operator!r}, left={self.left}, right={self.right})"
@@ -271,13 +275,13 @@ def translator(problem):
         # --- Numbers: digits and decimal separator ---
         if isInt(current_char) or (b >= 0 and current_char == "."):
             str_number = current_char
-            hat_schon_komma = False  # Only one dot allowed in a numeric literal
+            has_decimal_point = False  # Only one dot allowed in a numeric literal
 
             while (b + 1 < len(problem)) and (isInt(problem[b + 1]) or problem[b + 1] == "."):
                 if problem[b + 1] == ".":
-                    if hat_schon_komma:
-                        raise E.SyntaxError("Double comma sign.", code = "3008" )
-                    hat_schon_komma = True
+                    if has_decimal_point:
+                        raise E.SyntaxError("Double comma sign.", code="3008")
+                    has_decimal_point = True
 
                 b += 1
                 str_number += problem[b]
@@ -306,15 +310,15 @@ def translator(problem):
 
         # --- Scientific functions and special forms: sin(, cos(, tan(, log(, √(, e^( ---
         elif ((((current_char) == 's' or (current_char) == 'c' or (current_char) == 't' or (
-        current_char) == 'l') and len(problem) - b >= 5) or
+                current_char) == 'l') and len(problem) - b >= 5) or
               (current_char == '√' and len(problem) - b >= 2) or
               (current_char == 'e' and len(problem) - b >= 3)):
 
-            if (current_char == '√' and problem[b+1] == '('):
+            if (current_char == '√' and problem[b + 1] == '('):
                 full_problem.append('√')
                 full_problem.append('(')
                 b = b + 1
-            elif (current_char == 'e' and problem[b+1] == '^' and problem[b+2] == '('):
+            elif (current_char == 'e' and problem[b + 1] == '^' and problem[b + 2] == '('):
                 full_problem.append('e^')
                 full_problem.append('(')
                 b = b + 2
@@ -327,19 +331,19 @@ def translator(problem):
                         full_problem.append('(')
                         b += 3
                     else:
-                        raise E.CalculationError(f"Missing parenthesis after: '{problem[b:b + 3]}", code = "3010")
+                        raise E.CalculationError(f"Missing parenthesis after: '{problem[b:b + 3]}", code="3010")
                 elif len(problem) - b == 3 and problem[b:b + 3] in ['sin', 'cos', 'tan', 'log']:
                     # Function name at end without '('
                     raise E.CalculationError(f"Missing parenthesis after: '{problem[b:b + 3]}", code="3023")
 
         # --- Constant π ---
         elif current_char == 'π':
-            ergebnis_string = ScientificEngine.isPi(str(current_char))
+            result_string = ScientificEngine.isPi(str(current_char))
             try:
-                berechneter_wert = Decimal(ergebnis_string)
-                full_problem.append(berechneter_wert)
+                calculated_value = Decimal(result_string)
+                full_problem.append(calculated_value)
             except ValueError:
-                raise E.CalculationError(f"Error with constant π:{ergebnis_string}", code = "3219")
+                raise E.CalculationError(f"Error with constant π:{result_string}", code="3219")
 
         # --- Variables (fallback) ---
         else:
@@ -361,29 +365,31 @@ def translator(problem):
 
         if b + 1 < len(full_problem):
 
-            aktuelles_element = full_problem[b]
-            nachfolger = full_problem[b + 1]
-            einfuegen_noetig = False
+            current_element = full_problem[b]
+            successor = full_problem[b + 1]
+            insertion_needed = False
 
-            ist_funktionsname = isScOp(nachfolger) != -1
-            ist_zahl_oder_variable = isinstance(aktuelles_element, (int, float, Decimal)) or ("var" in str(aktuelles_element) and
-                                                                                              isinstance(aktuelles_element, str))
-            ist_klammer_oder_nachfolger = (nachfolger == '(' or ("var" in str(nachfolger) and isinstance(nachfolger, str)) or
-                                           isinstance(nachfolger, (int, float, Decimal)) or ist_funktionsname)
-            ist_kein_operator = aktuelles_element not in Operations and nachfolger not in Operations
+            is_function_name = isScOp(successor) != -1
+            is_number_or_variable = isinstance(current_element, (int, float, Decimal)) or (
+                        "var" in str(current_element) and
+                        isinstance(current_element, str))
+            is_paren_or_variable_or_number = (
+                        successor == '(' or ("var" in str(successor) and isinstance(successor, str)) or
+                        isinstance(successor, (int, float, Decimal)) or is_function_name)
+            is_not_an_operator = current_element not in Operations and successor not in Operations
 
-            if (ist_zahl_oder_variable or aktuelles_element == ')') and \
-                    (ist_klammer_oder_nachfolger or nachfolger == '(') and \
-                    ist_kein_operator:
+            if (is_number_or_variable or current_element == ')') and \
+                    (is_paren_or_variable_or_number or successor == '(') and \
+                    is_not_an_operator:
 
-                if aktuelles_element in ['*', '+', '-', '/'] or nachfolger in ['*', '+', '-', '/']:
-                    einfuegen_noetig = False
-                elif aktuelles_element == ')' and nachfolger == '(':
-                    einfuegen_noetig = True
-                elif aktuelles_element != '(' and nachfolger != ')':
-                    einfuegen_noetig = True
+                if current_element in ['*', '+', '-', '/'] or successor in ['*', '+', '-', '/']:
+                    insertion_needed = False
+                elif current_element == ')' and successor == '(':
+                    insertion_needed = True
+                elif current_element != '(' and successor != ')':
+                    insertion_needed = True
 
-            if einfuegen_noetig:
+            if insertion_needed:
                 full_problem.insert(b + 1, '*')
 
         b += 1
@@ -418,16 +424,17 @@ def ast(received_string, settings):
 
     # NEW: Guard against starting with '*' or '/' which implies a missing left operand.
     if analysed and (analysed[0] == "*" or analysed[0] == "/"):
-        raise E.CalculationError("Missing Number.", code = "3028")
+        raise E.CalculationError("Missing Number.", code="3028")
 
     # NEW: Additional pre-parse validations / rewrites to support augmented assignment.
     if analysed:
         b = 0
 
-        while b < len(analysed)-1:
+        while b < len(analysed) - 1:
 
             # Case 1: operator directly followed by '=' (e.g., "+=") without AA allowed → error
-            if (len(analysed) != b + 1) and (analysed[b + 1] == "=" and (analysed[b] in Operations)) and (settings["allow_augmented_assignment"] == False):
+            if (len(analysed) != b + 1) and (analysed[b + 1] == "=" and (analysed[b] in Operations)) and (
+                    settings["allow_augmented_assignment"] == False):
                 raise E.CalculationError("Missing Number before '='.", code="3028")
 
             # Case 1a (NEW): If AA is allowed and there is NO variable in the expression,
@@ -435,10 +442,12 @@ def ast(received_string, settings):
             #   - insert '(' after '='
             #   - append ')' at the end
             #   - remove the original '=' right after operator (so it becomes an infix '=')
-            elif((len(analysed) != b + 1 or len(analysed) != b + 2 ) and (analysed[b + 1] == "=" and (analysed[b] in Operations)) and (settings["allow_augmented_assignment"] == True) and not "var0" in analysed):
-                    analysed.append(")")
-                    analysed.insert(b+2, "(")
-                    analysed.pop(b+1)
+            elif ((len(analysed) != b + 1 or len(analysed) != b + 2) and (
+                    analysed[b + 1] == "=" and (analysed[b] in Operations)) and (
+                          settings["allow_augmented_assignment"] == True) and not "var0" in analysed):
+                analysed.append(")")
+                analysed.insert(b + 2, "(")
+                analysed.pop(b + 1)
 
             # Case 1b (NEW): If AA is attempted while variables exist, forbid it
             # to avoid ambiguous solver semantics.
@@ -456,14 +465,15 @@ def ast(received_string, settings):
                 raise E.CalculationError(f"Missing Number after {analysed[-1]}", code="3029")
 
             # NEW: operator followed by '=' (AA disabled) and no variables → still "missing number after <op>"
-            elif (analysed[b] in Operations and (analysed[b + 1] == "=" and (settings["allow_augmented_assignment"] == False))) and not "var0" in analysed:
+            elif (analysed[b] in Operations and (analysed[b + 1] == "=" and (
+                    settings["allow_augmented_assignment"] == False))) and not "var0" in analysed:
                 raise E.CalculationError(f"Missing Number after {analysed[b]}", code="3029")
 
             b += 1
 
     # '=' at start/end while a variable exists → malformed equation
-    if  ((analysed and analysed[-1] == "=") or (analysed and analysed[0] == "=")) and "var0" in analysed:
-        raise E.CalculationError(f"{received_string}", code = "3025")
+    if ((analysed and analysed[-1] == "=") or (analysed and analysed[0] == "=")) and "var0" in analysed:
+        raise E.CalculationError(f"{received_string}", code="3025")
 
     if debug == True:
         print(analysed)
@@ -476,56 +486,55 @@ def ast(received_string, settings):
             token = tokens.pop(0)
         else:
             # NEW: explicit "missing number" when a factor is required but tokens are exhausted.
-            raise E.CalculationError(f"Missing Number.", code = "3027")
+            raise E.CalculationError(f"Missing Number.", code="3027")
 
         # Parenthesized sub-expression
         if token == "(":
-            baum_in_der_klammer = parse_sum(tokens)
+            subtree_in_paren = parse_sum(tokens)
             if not tokens or tokens.pop(0) != ')':
-                raise E.SyntaxError("Missing closing parenthesis ')'", code = "3009")
-            return baum_in_der_klammer
+                raise E.SyntaxError("Missing closing parenthesis ')'", code="3009")
+            return subtree_in_paren
 
         # Scientific functions / constants
         elif token in Science_Operations:
 
             if token == 'π':
-                ergebnis = ScientificEngine.isPi(token)
+                result = ScientificEngine.isPi(token)
                 try:
-                    berechneter_wert = Decimal(ergebnis)
-                    return Number(berechneter_wert)
+                    calculated_value = Decimal(result)
+                    return Number(calculated_value)
                 except ValueError:
-                    raise E.SyntaxError(f"Error with constant π: {ergebnis}", code = "3219")
+                    raise E.SyntaxError(f"Error with constant π: {result}", code="3219")
 
             else:
                 # function must be followed by '('
                 if not tokens or tokens.pop(0) != '(':
-                    raise E.SyntaxError(f"Missing opening parenthesis after function {token}", code = "3010")
+                    raise E.SyntaxError(f"Missing opening parenthesis after function {token}", code="3010")
 
-                argument_baum = parse_sum(tokens)
+                argument_subtree = parse_sum(tokens)
 
                 # Special case: log(number, base)
                 if token == 'log' and tokens and tokens[0] == ',':
                     tokens.pop(0)
-                    basis_baum = parse_sum(tokens)
+                    base_subtree = parse_sum(tokens)
                     if not tokens or tokens.pop(0) != ')':
-                        raise E.SyntaxError(f"Missing closing parenthesis after logarithm base.", code = "3009")
-                    argument_wert = argument_baum.evaluate()
-                    basis_wert = basis_baum.evaluate()
-                    ScienceOp = f"{token}({argument_wert},{basis_wert})"
+                        raise E.SyntaxError(f"Missing closing parenthesis after logarithm base.", code="3009")
+                    argument_value = argument_subtree.evaluate()
+                    base_value = base_subtree.evaluate()
+                    ScienceOp = f"{token}({argument_value},{base_value})"
                 else:
                     if not tokens or tokens.pop(0) != ')':
-                        raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code = "3009")
-                    argument_wert = argument_baum.evaluate()
-                    ScienceOp = f"{token}({argument_wert})"
+                        raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009")
+                    argument_value = argument_subtree.evaluate()
+                    ScienceOp = f"{token}({argument_value})"
 
                 # Delegate to scientific engine; keep result as-is for Number()
-                ergebnis_string = ScientificEngine.unknown_function(ScienceOp)
+                result_string = ScientificEngine.unknown_function(ScienceOp)
                 try:
-                    # berechneter_wert = fractions.Fraction(ergebnis_string)  # original idea (not used)
-                    berechneter_wert = ergebnis_string
-                    return Number(berechneter_wert)
+                    calculated_value = result_string
+                    return Number(calculated_value)
                 except ValueError:
-                    raise E.SyntaxError(f"Error in scientific function: {ergebnis_string}", code = "3218")
+                    raise E.SyntaxError(f"Error in scientific function: {result_string}", code="3218")
 
         # Literals / variables
         elif isinstance(token, Decimal):
@@ -537,7 +546,7 @@ def ast(received_string, settings):
         elif "var" in str(token):
             return Variable(token)
         else:
-            raise E.SyntaxError(f"Unexpected token: {token}", code = "3012")
+            raise E.SyntaxError(f"Unexpected token: {token}", code="3012")
 
     def parse_unary(tokens):
         """Handle leading '+'/'-' (unary minus becomes 0 - operand)."""
@@ -556,92 +565,92 @@ def ast(received_string, settings):
 
     def parse_power(tokens):
         """Exponentiation '^' (handled before * and +)."""
-        aktueller_baum = parse_factor(tokens)
+        current_subtree = parse_factor(tokens)
         while tokens and tokens[0] in ("^"):
             operator = tokens.pop(0)
-            rechtes_teil = parse_unary(tokens)
-            if not isinstance(aktueller_baum, Variable) and not isinstance(rechtes_teil, Variable):
+            right_part = parse_unary(tokens)
+            if not isinstance(current_subtree, Variable) and not isinstance(right_part, Variable):
                 # Pre-evaluate when both sides are numeric
-                basis = aktueller_baum.evaluate()
-                exponent = rechtes_teil.evaluate()
-                ergebnis = basis ** exponent
-                aktueller_baum = Number(ergebnis)
+                base = current_subtree.evaluate()
+                exponent = right_part.evaluate()
+                result = base ** exponent
+                current_subtree = Number(result)
             else:
                 # Keep as symbolic BinOp otherwise
-                aktueller_baum = BinOp(aktueller_baum, operator, rechtes_teil)
-        return aktueller_baum
+                current_subtree = BinOp(current_subtree, operator, right_part)
+        return current_subtree
 
     def parse_term(tokens):
         """Multiplication and division."""
-        aktueller_baum = parse_unary(tokens)
-        while tokens and tokens[0] in ("*","/"):
+        current_subtree = parse_unary(tokens)
+        while tokens and tokens[0] in ("*", "/"):
             operator = tokens.pop(0)
-            rechtes_teil = parse_unary(tokens)
-            aktueller_baum = BinOp(aktueller_baum, operator, rechtes_teil)
-        return aktueller_baum
+            right_part = parse_unary(tokens)
+            current_subtree = BinOp(current_subtree, operator, right_part)
+        return current_subtree
 
     def parse_sum(tokens):
         """Addition and subtraction."""
-        aktueller_baum = parse_term(tokens)
+        current_subtree = parse_term(tokens)
         while tokens and tokens[0] in ("+", "-"):
             operator = tokens.pop(0)
             if debug == True:
                 print("Currently at:" + str(operator) + "in parse_sum")
-            rechte_seite = parse_term(tokens)
-            aktueller_baum = BinOp(aktueller_baum, operator, rechte_seite)
-        return aktueller_baum
+            right_side = parse_term(tokens)
+            current_subtree = BinOp(current_subtree, operator, right_side)
+        return current_subtree
 
     def parse_gleichung(tokens):
         """Optional '=' at the top level: build BinOp('=') when present."""
-        linke_seite = parse_sum(tokens)
+        left_side = parse_sum(tokens)
         if tokens and tokens[0] == "=":
             operator = tokens.pop(0)
-            rechte_seite = parse_sum(tokens)
-            return BinOp(linke_seite, operator, rechte_seite)
-        return linke_seite
+            right_side = parse_sum(tokens)
+            return BinOp(left_side, operator, right_side)
+        return left_side
 
     # Build the final AST
-    finaler_baum = parse_gleichung(analysed)
+    final_tree = parse_gleichung(analysed)
 
     # Decide if this is a CAS-style equation with <= 1 variable
-    if isinstance(finaler_baum, BinOp) and finaler_baum.operator == '=' and var_counter <= 1:
+    if isinstance(final_tree, BinOp) and final_tree.operator == '=' and var_counter <= 1:
         cas = True
 
     if debug == True:
         print("Final AST:")
-        print(finaler_baum)
+        print(final_tree)
 
     # `cas` may or may not be set above; default to False
     cas = locals().get('cas', False)
 
-    return finaler_baum, cas, var_counter
+    return final_tree, cas, var_counter
 
 
 # -----------------------------
 # Linear solver (one variable)
 # -----------------------------
 
-def solve(baum, var_name):
+def solve(tree, var_name):
     """Solve (A*x + B) = (C*x + D) for x, or detect no/inf. solutions."""
-    if not isinstance(baum, BinOp) or baum.operator != '=':
-        raise E.SolverError("No valid equation to solve.", code = "3012")
-    (A, B) = baum.left.collect_term(var_name)
-    (C, D) = baum.right.collect_term(var_name)
-    nenner = A - C
-    zaehler = D - B
-    if nenner == 0:
-        if zaehler == 0:
+    if not isinstance(tree, BinOp) or tree.operator != '=':
+        raise E.SolverError("No valid equation to solve.", code="3012")
+    (A, B) = tree.left.collect_term(var_name)
+    (C, D) = tree.right.collect_term(var_name)
+    denominator = A - C
+    numerator = D - B
+    if denominator == 0:
+        if numerator == 0:
             return "Inf. Solutions"
         else:
             return "No Solution"
-    return zaehler / nenner
+    return numerator / denominator
 
 
 # -----------------------------
 # Result formatting
 # -----------------------------
 
-def cleanup(ergebnis):
+def cleanup(result):
     """Format a numeric result as Fraction or Decimal depending on settings.
 
     Returns:
@@ -654,33 +663,33 @@ def cleanup(ergebnis):
     target_fractions = config_manager.load_setting_value("fractions")
 
     # Try Fraction rendering if enabled and the result is Decimal
-    if target_fractions == True and isinstance(ergebnis, Decimal):
+    if target_fractions == True and isinstance(result, Decimal):
         try:
-            bruch_ergebnis = fractions.Fraction.from_decimal(ergebnis)
-            gekuerzter_bruch = bruch_ergebnis.limit_denominator(100000)
-            zaehler = gekuerzter_bruch.numerator
-            nenner = gekuerzter_bruch.denominator
-            if abs(zaehler) > nenner:
+            fraction_result = fractions.Fraction.from_decimal(result)
+            simplified_fraction = fraction_result.limit_denominator(100000)
+            numerator = simplified_fraction.numerator
+            denominator = simplified_fraction.denominator
+            if abs(numerator) > denominator:
                 # Mixed fraction form (e.g., 3/2 -> "1 1/2")
-                ganzzahl = zaehler // nenner
-                rest_zaehler = zaehler % nenner
+                integer_part = numerator // denominator
+                remainder_numerator = numerator % denominator
 
-                if rest_zaehler == 0:
-                    return str(ganzzahl), rounding
+                if remainder_numerator == 0:
+                    return str(integer_part), rounding
                 else:
                     # Adjust for negatives so that the remainder part is positive
-                    if ganzzahl < 0 and rest_zaehler > 0:
-                        ganzzahl += 1
-                        rest_zaehler = abs(nenner - rest_zaehler)
-                    return f"{ganzzahl} {rest_zaehler}/{nenner}", rounding
+                    if integer_part < 0 and remainder_numerator > 0:
+                        integer_part += 1
+                        remainder_numerator = abs(denominator - remainder_numerator)
+                    return f"{integer_part} {remainder_numerator}/{denominator}", rounding
 
-            return str(gekuerzter_bruch), rounding
+            return str(simplified_fraction), rounding
 
         except Exception as e:
             # Surface as CalculationError (preserves UI error handling)
-            raise E.CalculationError(f"Warning: Fraction conversion failed: {e}", code = "3024")
+            raise E.CalculationError(f"Warning: Fraction conversion failed: {e}", code="3024")
 
-    if isinstance(ergebnis, Decimal):
+    if isinstance(result, Decimal):
 
         # --- Smarter Rounding Logic ---
         #
@@ -693,47 +702,47 @@ def cleanup(ergebnis):
         # After rounding, precision is reset to the global standard (50).
         #
 
-        if ergebnis % 1 == 0:
+        if result % 1 == 0:
             # Integer result – return normalized without rounding
-            return ergebnis.normalize(), rounding
+            return result.normalize(), rounding
         else:
             # Non-integer result (e.g. 1/3 or repeating decimals)
             getcontext().prec = 128  # Prevent quantize overflow
 
             if target_decimals >= 0:
-                rundungs_muster = Decimal('1e-' + str(target_decimals))
+                rounding_pattern = Decimal('1e-' + str(target_decimals))
             else:
-                rundungs_muster = Decimal('1')
+                rounding_pattern = Decimal('1')
 
-            gerundetes_ergebnis = ergebnis.quantize(rundungs_muster)
+            rounded_result = result.quantize(rounding_pattern)
             getcontext().prec = 50  # Restore standard precision
 
-            if gerundetes_ergebnis != ergebnis:
+            if rounded_result != result:
                 rounding = True
 
-            return gerundetes_ergebnis.normalize(), rounding
+            return rounded_result.normalize(), rounding
 
 
     # Legacy float/int handling (in case evaluation produced non-Decimal)
-    elif isinstance(ergebnis, (int, float)):
-        if ergebnis == int(ergebnis):
-            return int(ergebnis), rounding
+    elif isinstance(result, (int, float)):
+        if result == int(result):
+            return int(result), rounding
 
         else:
-            s_ergebnis = str(ergebnis)
-            if '.' in s_ergebnis:
-                decimal_index = s_ergebnis.find('.')
-                actual_decimals = len(s_ergebnis) - decimal_index - 1
+            s_result = str(result)
+            if '.' in s_result:
+                decimal_index = s_result.find('.')
+                actual_decimals = len(s_result) - decimal_index - 1
                 if actual_decimals > target_decimals:
                     rounding = True
-                    new_number = round(ergebnis, target_decimals)
+                    new_number = round(result, target_decimals)
                     return new_number, rounding
 
-                return ergebnis, rounding
-            return ergebnis, rounding
+                return result, rounding
+            return result, rounding
 
     # Fallback: unknown type, return as-is
-    return ergebnis, rounding
+    return result, rounding
 
 
 # -----------------------------
@@ -747,51 +756,75 @@ def calculate(problem):
     settings = config_manager.load_setting_value("all")  # NEW: pass UI settings down to parser
     var_list = []
     try:
-        finaler_baum, cas, var_counter = ast(problem, settings)  # NEW: settings param enables AA handling
+        final_tree, cas, var_counter = ast(problem, settings)  # NEW: settings param enables AA handling
 
         # Decide evaluation mode
         if cas and var_counter > 0:
             # Solve linear equation for first variable symbol in the token stream
             var_name_in_ast = "var0"
-            ergebnis = solve(finaler_baum, var_name_in_ast)
+            result = solve(final_tree, var_name_in_ast)
 
         elif not cas and var_counter == 0:
             # Pure numeric evaluation
-            ergebnis = finaler_baum.evaluate()
+            result = final_tree.evaluate()
 
         elif cas and var_counter == 0:
             # Pure equality check (no variable): returns "= True/False"
-            left_val = finaler_baum.left.evaluate()
-            right_val = finaler_baum.right.evaluate()
-            ausgabe_string = "True" if left_val == right_val else "False"
-            return ausgabe_string, 4
+            left_val = final_tree.left.evaluate()
+            right_val = final_tree.right.evaluate()
+            output_string = "True" if left_val == right_val else "False"
+            return output_string, 4
 
         else:
             # Mixed/invalid states with or without '=' and variables
             if cas:
-                raise E.SolverError("The solver was used on a non-equation", code = "3005")
+                raise E.SolverError("The solver was used on a non-equation", code="3005")
             elif not cas and not "=" in problem:
                 raise E.SolverError("No '=' found, although a variable was specified.", code="3012")
             elif cas and "=" in problem and (
                     problem.index("=") == 0 or problem.index("=") == (len(problem) - 1)):
-                raise E.SolverError("One of the sides is empty: " + str(problem), code = "3022")
+                raise E.SolverError("One of the sides is empty: " + str(problem), code="3022")
             else:
                 raise E.CalculationError("The calculator was called on an equation.", code="3015")
 
         # Render result based on settings (fractions/decimals, rounding flag)
-        ergebnis, rounding = cleanup(ergebnis)
-        ungefaehr_zeichen = "\u2248"  # "≈"
+        result, rounding = cleanup(result)
+        approx_sign = "\u2248"  # "≈"
+
+        # --- START OF MODIFIED BLOCK FOR EXPONENTIAL NOTATION CONTROL ---
 
         # Convert normalized result to string (Decimal supports to_normal_string)
-        if isinstance(ergebnis, str) and '/' in ergebnis:
-            ausgabe_string = ergebnis
-        elif isinstance(ergebnis, Decimal):
-            try:
-                ausgabe_string = ergebnis.to_normal_string()
-            except AttributeError:
-                ausgabe_string = str(ergebnis)
+        if isinstance(result, str) and '/' in result:
+            output_string = result
+        elif isinstance(result, Decimal):
+            # Threshold for scientific notation: 1 Billion (1e9)
+            scientific_threshold = Decimal('1e9')
+
+            if result.is_zero():
+                output_string = "0"  # Special case: 0
+            elif abs(result) >= scientific_threshold or abs(result) < Decimal('1e-6'):
+                # Use exponential notation for very large (> 1e9) or very small (< 1e-6) numbers
+                try:
+                    # Decimal.to_eng_string() often provides more readable E-notation
+                    output_string = result.to_eng_string()
+                except AttributeError:
+                    output_string = str(result)
+                except Overflow:
+                    # Fallback on overflow
+                    output_string = str(result)
+            else:
+                # For "normal" numbers (between 1e-6 and 1e9), suppress E-notation
+                try:
+                    # Use to_normal_string() to get the standard string representation
+                    # without exponential notation for numbers in the "normal" range.
+                    output_string = result.to_normal_string()
+                except AttributeError:
+                    # Fallback if to_normal_string is not available
+                    output_string = "{:f}".format(result)
         else:
-            ausgabe_string = str(ergebnis)
+            output_string = str(result)
+
+        # --- END OF MODIFIED BLOCK ---
 
         # Final display formatting
         # 1. Variable and Rounding
@@ -799,13 +832,13 @@ def calculate(problem):
         # 3. No Variable but rounding
         # 4. No Variable, No rounding
         if cas == True and rounding == True:
-            return ((ausgabe_string), 1)
+            return ((output_string), 1)
         elif cas == True and rounding == False:
-            return ((ausgabe_string), 2)
+            return ((output_string), 2)
         elif rounding == True and not cas:
-            return ((ausgabe_string), 3)
+            return ((output_string), 3)
         else:
-            return ((ausgabe_string), 4)
+            return ((output_string), 4)
 
     # Known numeric overflow
     except Overflow as e:
@@ -837,8 +870,8 @@ def test_main():
     """Simple REPL-like runner for manual testing of the engine."""
     print("Enter the problem: ")
     problem = input()
-    ergebnis = calculate(problem)
-    print(ergebnis)
+    result = calculate(problem)
+    print(result)
     # test_main()  # recursive call disabled
 
 
