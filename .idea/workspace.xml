@@ -4,8 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="745368cf-0ebe-429a-9de3-882b25c76b65" name="Changes" comment="added requirements.txt">
+    <list default="true" id="745368cf-0ebe-429a-9de3-882b25c76b65" name="Changes" comment="Replaced shift_to_copy with allow_augmented_assignment. Additionally the paste button updates when shift is pressed/held. Implemented Augmented Assignment">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Modules/MathEngine.py" beforeDir="false" afterPath="$PROJECT_DIR$/Modules/MathEngine.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Modules/UI.py" beforeDir="false" afterPath="$PROJECT_DIR$/Modules/UI.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Modules/error.py" beforeDir="false" afterPath="$PROJECT_DIR$/Modules/error.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config.json" beforeDir="false" afterPath="$PROJECT_DIR$/config.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -14,6 +17,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="Git.Settings">
+    <option name="PUSH_AUTO_UPDATE" value="true" />
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
         <entry key="$PROJECT_DIR$" value="master" />
@@ -21,6 +25,18 @@
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;JanTeske06&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/JanTeske06/Python_Calculator.git&quot;,
+    &quot;accountId&quot;: &quot;cc2c4904-e6ff-464d-a75b-456ce1aa2373&quot;
+  }
+}</component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 1
 }</component>
@@ -30,17 +46,42 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.MathEngine.executor": "Run",
-    "Python.UI.executor": "Run",
-    "Python.main.executor": "Run",
-    "Python.test mathengine.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "master"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.MathEngine.executor&quot;: &quot;Run&quot;,
+    &quot;Python.UI.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test mathengine.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/chaos/Desktop/Python_calculator/main.py&quot;
   }
-}]]></component>
-  <component name="RunManager">
+}</component>
+  <component name="RunManager" selected="Python.main">
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="Python_calculator" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="Python 3.8 (Python_calculator)" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="test mathengine" type="PythonConfigurationType" factoryName="Python">
       <module name="Python_calculator" />
       <option name="ENV_FILES" value="" />
@@ -64,6 +105,10 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <list>
+      <item itemvalue="Python.test mathengine" />
+      <item itemvalue="Python.main" />
+    </list>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
@@ -97,12 +142,77 @@
       <option name="project" value="LOCAL" />
       <updated>1762720735587</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="Translated to English">
+      <option name="closed" value="true" />
+      <created>1762725502898</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1762725502898</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Added screenshots to README">
+      <option name="closed" value="true" />
+      <created>1762731499180</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1762731499180</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Deleted old File and Translated the whole UI into English">
+      <option name="closed" value="true" />
+      <created>1762732374353</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1762732374353</updated>
+    </task>
+    <task id="LOCAL-00006" summary="small bugfix with Log">
+      <option name="closed" value="true" />
+      <created>1762732572119</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1762732572119</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Added Documentation / Comments">
+      <option name="closed" value="true" />
+      <created>1762738680275</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1762738680275</updated>
+    </task>
+    <task id="LOCAL-00008" summary="Replaced shift_to_copy with allow_augmented_assignment. Additionally the paste button updates when shift is pressed/held. Implemented Augmented Assignment">
+      <option name="closed" value="true" />
+      <created>1762742960958</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1762742960958</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Fixed a bug" />
     <MESSAGE value="added requirements.txt" />
-    <option name="LAST_COMMIT_MESSAGE" value="added requirements.txt" />
+    <MESSAGE value="Translated to English" />
+    <MESSAGE value="Added screenshots to README" />
+    <MESSAGE value="Deleted old File and Translated the whole UI into English" />
+    <MESSAGE value="small bugfix with Log" />
+    <MESSAGE value="Added Documentation / Comments" />
+    <MESSAGE value="Replaced shift_to_copy with allow_augmented_assignment. Additionally the paste button updates when shift is pressed/held. Implemented Augmented Assignment" />
+    <option name="LAST_COMMIT_MESSAGE" value="Replaced shift_to_copy with allow_augmented_assignment. Additionally the paste button updates when shift is pressed/held. Implemented Augmented Assignment" />
   </component>
 </project>

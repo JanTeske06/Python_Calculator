@@ -99,7 +99,7 @@ class Worker(QObject):
 
     """""
 
-    job_finished = Signal(object, str)
+    job_finished = Signal(object, str, int)
 
     def __init__(self, problem):
         super().__init__()
@@ -110,16 +110,16 @@ class Worker(QObject):
         try:
             # --- 1. Start Calculation ---
             # This is the call to the "engine". It runs in the separate thread.
-            result = MathEngine.calculate(self.data)
+            result, mode = MathEngine.calculate(self.data)
 
             # --- 2. Send Success Signal ---
             # Emits the result back to the UI thread (connected to Calc_result)
-            self.job_finished.emit(result, self.data)
+            self.job_finished.emit(result, self.data, mode)
 
         except E.MathError as e:
             # --- 3. Send Math Error Signal ---
             # Found a known, handled error (e.g., "Division by zero")
-            self.job_finished.emit(e, self.data)
+            self.job_finished.emit(e, self.data, 0)
 
         except Exception as e:
             # --- 4. Send Critical Error Signal ---
@@ -129,7 +129,7 @@ class Worker(QObject):
                 code="9999",
                 equation=self.data  # Fixed typo from self.daten
             )
-            self.job_finished.emit(critical_error, self.data)
+            self.job_finished.emit(critical_error, self.data, 0)
 
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -318,6 +318,9 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
         # --- 2. Instance State Variables ---
         # These are the "memory" of THIS calculator instance
+        self.ans = ""   # Stores last result
+        self.calculator_result = ""
+        self.display_results = ""
         self.equation = ""  # New: stores the last equation text (used with show_equation/augmented assignment UI features)
         self.thread_active = False  # Is a calculation running?
         self.received_result = False  # Was the last text an answer?
@@ -474,12 +477,20 @@ class CalculatorPrototype(QtWidgets.QWidget):
         """
         if self.shift_is_held:
             paste_button = self.button_objects.get("📋")
+            equal_button = self.button_objects.get("=")
             if paste_button:
                 paste_button.setText('📑')
+
+            if equal_button:
+                equal_button.setText("Ans")
         else:
             paste_button = self.button_objects.get('📋')
+            equal_button = self.button_objects.get("=")
             if paste_button:
                 paste_button.setText('📋')
+
+            if equal_button:
+                equal_button.setText("=")
 
     def keyPressEvent(self, event):
         # New: when Shift is pressed, reflect Paste-mode on the clipboard button label
@@ -495,187 +506,34 @@ class CalculatorPrototype(QtWidgets.QWidget):
             self.update_button_labels()
         super().keyReleaseEvent(event)
 
-    # --- MAIN BUTTON LOGIC ---
-    # This is the "brain" of the calculator UI.
     def handle_button_press(self, value):
-        global first_run  # Note: This is a global variable
-        global mein_thread  # Note: This is a global variable
-
-        # --- 1. Handle Input After a Result (=) ---
-        # New: extract the last result using rindex so expressions like "12+=6 = 18" correctly pick "18".
-        if len(self.undo) >= 2 and not value == "<" and self.undo[-2] == "⏎":
-            ungefaehr_zeichen = "\u2248"
-            marker_to_find = ""
-
-            # Check what kind of result it was (equation, solver, etc.)
-            if "|" in self.current_text:
-                marker_to_find = "|"
-            elif "=" in self.current_text:
-                marker_to_find = "="
-            elif 'x' in self.current_text:
-                marker_to_find = ""
-            elif ungefaehr_zeichen in self.current_text:
-                marker_to_find = ungefaehr_zeichen
-
-            # This logic extracts the *result* of the previous calculation
-            # to be used as the *start* of the new one (e.g., "12+=6 = 18" -> "18")
-            if marker_to_find != "":
-                try:
-                    if marker_to_find != "|":
-                        # New: use rindex to get the last '=' or '≈' occurrence
-                        marker_index = self.current_text.rindex(marker_to_find)
-                        start_index = marker_index + 1
-                        temp_new_text = self.current_text[start_index:].lstrip()
-                        self.current_text = temp_new_text
-
-                    elif marker_to_find == "|":
-                        # For solver results, keep the equation part before the pipe
-                        marker_index = self.current_text.index(marker_to_find)
-                        temp_new_text = self.current_text[:marker_index].rstrip()
-                        self.current_text = temp_new_text
-
-                except ValueError:
-                    pass  # Ignore if marker wasn't found
-
-        # Resets the display if the last result was a boolean
-        if self.current_text.strip() == "False" or self.current_text.strip() == "True":
-            self.current_text = "0"
-        #
-        # if self.setting_value_list["show_equation"] == True and self.setting_value_list["allow_augmented_assignment"] == True and self.equation != "":
-        #     self.display.setText(self.current_text)
-
-        # --- 3. Handle Special Keys ---
-
-        if value == 'C':
-            # --- C (Clear) Key ---
-            self.current_text = "0"
-            self.display.setText(self.current_text)
-
-        elif (value == '<'):
-            # --- < (Backspace) Key ---
-
-            # If display is already empty, do nothing
-            if len(self.current_text) <= 0 or self.current_text == "0":
-                self.current_text = "0"
-                self.display.setText(self.current_text)
-                return
-
-            # Special logic for backspacing after an answer
-            elif len(self.undo) > 1:
-                print(self.current_text)
-                print(str(get_line_number()))
-                if self.undo[-2] == '⏎':
-                    # This complex block handles backspacing after a result
-                    # (e.g., "x=5 | ..." or "5+5=10")
-                    print(self.undo)
-                    print(str(get_line_number()))
-                    # self.current_text = "3=3 |  True"
-                    if "x" in self.current_text:
-                        if "|" in self.current_text:
-                            print(str(get_line_number()))
-                            self.current_text = self.current_text[:self.current_text.index("|") - 1]
-                        elif "=" in self.current_text:
-                            print(str(get_line_number()))
-                            self.current_text = self.current_text[self.current_text.index("=") + 1:]
-                        elif "≈" in self.current_text:
-                            print(str(get_line_number()))
-                            self.current_text = self.current_text[self.current_text.index("≈") + 1:]
-                    elif "=" in self.current_text and (
-                            not "True" in self.current_text and not "False" in self.current_text):
-                        print(str(get_line_number()))
-                        self.current_text = self.current_text[self.current_text.index("=") + 1:]
-                    elif "≈" in self.current_text and (
-                            not "True" in self.current_text and not "False" in self.current_text):
-                        print(str(get_line_number()))
-                        self.current_text = self.current_text[self.current_text.index("≈") + 1:]
-                    elif "=" in self.current_text and ("True" in self.current_text or "False" in self.current_text):
-                        print(str(get_line_number()))
-                        self.current_text = self.current_text[:self.current_text.index("|") - 1]
-                    self.current_text = self.current_text + "0"
-
-            # --- Smart Backspace Logic ---
-            # Deletes entire functions (e.g., "sin(") in one go
-            if self.current_text.endswith("True") or self.current_text.endswith("False"):
-                self.current_text = self.current_text[:-5]
-            elif self.current_text.endswith("sin(") or self.current_text.endswith("cos(") or self.current_text.endswith(
-                    "tan(") or self.current_text.endswith("log("):
-                self.current_text = self.current_text[:-4]
-            elif self.current_text.endswith("e^(") or self.current_text.endswith("sin") or self.current_text.endswith(
-                    "cos") or self.current_text.endswith("tan") or self.current_text.endswith("log"):
-                self.current_text = self.current_text[:-3]
-            elif self.current_text.endswith("√(") or self.current_text.endswith("^(") or self.current_text.endswith(
-                    "e^"):
-                self.current_text = self.current_text[:-2]
+        if value == "=" or value == "Ans":
+            if self.shift_is_held:
+                value = "Ans"
             else:
-                # --- Normal Backspace (delete one character) ---
-                print(self.undo)
-                print(str(get_line_number()))
-                self.current_text = self.current_text[:-1]
+                value = "="
 
-            # Update display, or show "0" if text is now empty
-            self.display.setText(self.current_text if self.current_text else "0")
 
-        elif (value == '⚙️'):
-            # --- Settings Key ---
-            return  # Logic is handled by self.open_settings, connected in __init__
 
-        elif value == '⏎':
-            # --- ⏎ (Enter/Calculate) Key ---
-            print(str(get_line_number()) + " " + self.current_text)
-
-            # Prevent starting a new calculation if one is already running
-            if self.thread_active:
-                print("ERROR: A calculation is already running!")  # 4002
-                return
+        if value == "<":
+            if len(self.undo) >= 2:
+                if self.setting_value_list["show_equation"] == True  and self.undo[-2] == "⏎":
+                    self.display_text = self.equation
+                elif  self.setting_value_list["show_equation"] == False and self.undo[-2] == "⏎":
+                    if "True" in self.display_text or "False" in self.display_text:
+                        self.display_text = "0"
+                    else:
+                        self.display_text = self.calculator_result
+                else:
+                    self.display_text = self.display_text[:-1]
             else:
-                self.thread_active = True
-                self.update_return_button()  # Visually change ⏎ to X
+                self.display_text = self.display_text[:-1]
 
-            text_to_display = self.display.text()
-            self.current_text = text_to_display
+            if self.display_text == "":
+                self.display_text = "0"
 
-            # Logic to re-use previous result if "show_equation" is on
-            if self.setting_value_list[
-                "show_equation"] == True and self.previous_equation and not "x" in self.current_text:
-                is_original_equation = (self.current_text == self.previous_equation)
-                if not is_original_equation and not "x" in self.current_text:
-                    value_part = None
-                    if "|" in text_to_display:
-                        value_part = text_to_display.split("|")[-1].strip()
-                    elif "=" in text_to_display and self.setting_value_list["allow_augmented_assignment"] == False:
-                        # New: respect setting to block augmented assignment reuse if disabled
-                        value_part = text_to_display.split("=")[-1].strip()
-                    elif "\u2248" in text_to_display:
-                        value_part = text_to_display.split("\u2248")[-1].strip()
-                    if value_part:
-                        self.current_text = f"{value_part}={value_part}"
-            else:
-                # Clean up solver pipe character if present
-                if "|" in self.current_text:
-                    self.current_text = self.current_text.replace("|", "")
-
-            # --- 4. Start Worker Thread ---
-            # We give the calculation job to the Worker to keep the UI from freezing
-            self.display.setText("...")  # Show "..." to indicate loading
-            return_button = self.button_objects['⏎']
-            QtWidgets.QApplication.processEvents()  # Force UI update *before* starting thread
-
-            # --- Input Validation ---
-            if not self.current_text.strip():
-                print("ERROR: Empty string sent to MathEngine.")
-                self.thread_active = False
-                self.update_return_button()
-                self.display.setText(text_to_display)
-                return
-
-            # --- Start Thread ---
-            worker_instanz = Worker(self.current_text)
-            mein_thread = threading.Thread(target=worker_instanz.run_Calc)
-            mein_thread.start()
-
-            # Connect the worker's "finished" signal to our result handler
-            worker_instanz.job_finished.connect(self.Calc_result)
-            return  # IMPORTANT: Stop function here. Result will arrive via signal.
+        elif value == "C":
+            self.display_text = "0"
 
         elif value == '↶':
             # --- Undo Key ---
@@ -683,104 +541,92 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 # Special case: Undo a calculation (pops 2 items: result and '⏎')
                 self.redo.append(self.undo.pop())
                 self.redo.append(self.undo.pop())
-                self.current_text = self.undo[-1]
-                self.display.setText(self.current_text)
-                print(f"The key '{value}' was pressed.")
+                self.display_text = self.undo[-1]
             elif len(self.undo) > 1:
                 # Normal undo (pops 1 item)
                 self.redo.append(self.undo.pop())
-                self.current_text = self.undo[-1]
-                self.display.setText(self.current_text)
-                print(f"The key '{value}' was pressed.")
-                print(self.undo)
+                self.display_text = self.undo[-1]
 
         elif value == '↷':
             # --- Redo Key ---
-            print("redo1: " + str(self.redo))
             if len(self.redo) >= 2 and self.redo[-1] == '⏎':
                 # Special case: Redo a calculation (appends 2 items)
-                print("redo2: " + str(self.redo))
                 self.undo.append(self.redo.pop())
                 self.undo.append(self.redo.pop())
-                self.current_text = self.undo[-1]
-                self.display.setText(self.current_text)
-                print(f"The key '{value}' was pressed.")
+                self.display_text = self.undo[-1]
             elif len(self.redo) > 0:
                 # Normal redo (appends 1 item)
                 self.undo.append(self.redo.pop())
-                self.current_text = self.undo[-1]
-                self.display.setText(self.current_text)
-                print(f"The key '{value}' was pressed.")
+                self.display_text = self.undo[-1]
 
-        elif value == '📋' or value == '📑':
-            # New: single handler for clipboard button.
-            # - If Shift is held, interpret as Copy (📋) and copy current display.
-            # - Otherwise, interpret as Paste (📑) and insert clipboard text.
-            if self.shift_is_held:
-                pyperclip.copy(self.display.text())
-            else:
-                clipboard = QtWidgets.QApplication.clipboard()
-                clipboard_text = clipboard.text()
 
-                # Clean solver/boolean decorations before pasting new content
-                if "x" in self.current_text or ("True" or "False") in self.current_text:
-                    if "|" in self.current_text:
-                        print(str(get_line_number()))
-                        self.current_text = self.current_text[:self.current_text.index("|") - 1]
 
-                if clipboard_text:
-                    # Replace "0" or append to existing input
-                    if self.current_text == "0":
-                        self.current_text = clipboard_text
-                    else:
-                        self.current_text = self.current_text + clipboard_text
+        elif (value == '⚙️'):
+            # --- Settings Key ---
+            return  # Logic is handled by self.open_settings, connected in __init__
 
-                    self.display.setText(self.current_text)
-                    self.undo.append(self.current_text)
-                    self.redo.clear()
+        elif value == '⏎':
+            if len(self.undo) >= 2:
+                if self.undo[-2] == "⏎":
+                    return
 
-                    # Optional auto-enter after paste (configurable)
-                    response = self.setting_value_list["after_paste_enter"]
-                    if response == False:
-                        self.update_font_size_display()
-                        pass
-                    elif response == True:
-                        if self.thread_active:
-                            print("ERROR: A calculation is already running!")  # 4002
-                            return
-                        else:
-                            self.thread_active = True
-                            self.update_return_button()
-                            self.display.setText("...")
-                            worker_instanz = Worker(self.current_text)
-                            mein_thread = threading.Thread(target=worker_instanz.run_Calc)
-                            mein_thread.start()
-                            worker_instanz.job_finished.connect(self.Calc_result)
-            return
+
+            if "Ans" in self.display_text:
+                if self.calculator_result == "":
+                    raise E.CalculationError("No Value in ANS", code = "4003")
+                self.display_text = self.display_text.replace("Ans", self.calculator_result)
+
+            # --- 4. Start Worker Thread ---
+            # We give the calculation job to the Worker to keep the UI from freezing
+            self.display.setText("...")  # Show "..." to indicate loading
+            return_button = self.button_objects['⏎']
+            QtWidgets.QApplication.processEvents()  # Force UI update *before* starting thread
+
+
+            # --- Start Thread ---
+            worker_instanz = Worker(self.display_text)
+            mein_thread = threading.Thread(target=worker_instanz.run_Calc)
+            mein_thread.start()
+
+            # Connect the worker's "finished" signal to our result handler
+            worker_instanz.job_finished.connect(self.Calc_result)
+            return  # IMPORTANT: Stop function here. Result will arrive via signal.
 
         else:
-            # --- 5. Normal Keys (Numbers & Operators) ---
-            # If "0" is shown, replace it (unless adding a decimal point)
-            if self.current_text == "0" and value != ".":
-                self.current_text = ""
+
 
             if len(self.undo) >= 2:
-                print(self.current_text)
-                if self.undo[-2] == "⏎" and self.setting_value_list["show_equation"] == True:
-                    self.display.setText(self.current_text)
+                if self.setting_value_list["show_equation"] == True and self.undo[-2] == "⏎" and "=" in self.equation:
+                    self.display_text = self.equation
 
-            self.current_text += str(value)
-            self.display.setText(self.current_text)
+                elif self.setting_value_list["show_equation"] == True and self.undo[-2] == "⏎" and not "=" in self.equation:
+                    self.display_text = self.calculator_result
 
-        # --- 6. Cleanup & State Update ---
-        self.update_font_size_display()  # Adjust font size
+                elif self.setting_value_list["show_equation"] == True and self.undo[-2] == "⏎":
+                    if "True" in self.calculator_result or "False" in self.calculator_result:
+                        self.display_text = self.equation
+                    else:
+                        self.display_text = self.equation
 
-        # Save the new state to the undo stack
+                elif self.setting_value_list["show_equation"] == False and self.undo[-2] == "⏎":
+                    if "True" in self.calculator_result or "False" in self.calculator_result:
+                        self.display_text = "0"
+                    else:
+                        self.display_text = self.calculator_result
+                else:
+                    pass
+            if self.display_text == "0":
+                self.display_text = ""
+            self.display_text += value
+
         if value != '↶' and value != '↷' and value != '📋' and value != '📑':
-            self.undo.append(self.current_text)
-            self.redo.clear()  # Clear redo stack on new action
+            self.undo.append(self.display_text)
+            self.redo.clear()
 
-        print(f"The key '{value}' was pressed.")
+        self.display.setText(self.display_text)
+
+
+
 
     def update_font_size_display(self):
         # --- Dynamic Font Resizing for Display ---
@@ -906,25 +752,126 @@ class CalculatorPrototype(QtWidgets.QWidget):
         else:
             return ""  # Use default stylesheet in light mode
 
-    def Calc_result(self, ergebnis, equation):
-        # --- 1. Handle Calculation Result ---
-        # This function is called by the Worker's "job_finished" signal
+    # def Calc_result(self, ergebnis, equation, mode):
+    #     # Mode:
+    #     # 1. Variable and Rounding
+    #     # 2. Varbiable and no Rounding
+    #     # 3. No Variable but rounding
+    #     # 4. No Variable, No rounding
+    #
+    #     # --- 1. Handle Calculation Result ---
+    #     # This function is called by the Worker's "job_finished" signal
+    #     self.received_result = True
+    #     self.thread_active = False  # Thread is no longer active
+    #
+    #
+    #
+    #     self.update_return_button()  # Change "X" back to "⏎"
+    #
+    #     # --- 2. Handle MathError Object ---
+    #     # If the worker sent back a MathError object...
+    #     if isinstance(ergebnis, E.MathError):
+    #         error_obj = ergebnis
+    #
+    #         # --- 2a. Build Error Dialog ---
+    #         error_box = QtWidgets.QMessageBox(self)
+    #         error_code = error_obj.code
+    #         additional_info = f"Details: {error_obj.message}\nEquation: {error_obj.equation}"
+    #
+    #         error_box.setIcon(QtWidgets.QMessageBox.Critical)
+    #         error_box.setWindowTitle("Calculation error")
+    #         error_box.setText(f"Error {error_code}: {E.ERROR_MESSAGES.get(error_code, 'Unknown error')}")
+    #         error_box.setInformativeText(additional_info)
+    #         error_box.setStandardButtons(QtWidgets.QMessageBox.Ok)
+    #         error_box.setStyleSheet(self.get_message_box_stylesheet())
+    #         error_box.exec()
+    #
+    #         # --- 2b. Reset Display ---
+    #         # Show the original (failed) equation
+    #         self.display.setText(equation)
+    #         self.update_font_size_display()
+    #         return  # Stop here
+    #
+    #     # --- 3. Handle Successful Result (String) ---
+    #     math_engine_output = ergebnis.strip()
+    #     self.ans = math_engine_output
+    #
+    #     show_equation_setting = self.setting_value_list["show_equation"]
+    #
+    #     # --- 4. Result Formatting Logic ---
+    #     # This block decides *how* to show the result
+    #
+    #     # --- 4a. Boolean Result (e.g., "5=5") ---
+    #
+    #
+    #
+    #     if (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == True:
+    #         math_engine_output = math_engine_output[math_engine_output.index("=") + 1:]
+    #         final_display_text = f"{equation} | {math_engine_output}"
+    #     elif (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == False:
+    #         math_engine_output = math_engine_output[math_engine_output.index("=") + 1:]
+    #         final_display_text = f"{math_engine_output}"
+    #
+    #     # --- 4b. Solver or Calculation Result (Show Equation = ON) ---
+    #     elif show_equation_setting == True:
+    #         is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
+    #         if is_solver_result:
+    #             final_display_text = f"{equation} | {math_engine_output}"  # e.g., "5x=10 | x = 2"
+    #         else:
+    #             clean_result = math_engine_output
+    #             # Strip the prefix (= or ≈) from the engine output
+    #             if clean_result.startswith("=") or clean_result.startswith("\u2248"):
+    #                 clean_result = clean_result[1:].strip()
+    #
+    #             # Re-add the correct prefix *after* the equation
+    #             if math_engine_output.startswith("\u2248"):
+    #                 final_display_text = f"{equation} {math_engine_output}"  # e.g., "1/3 ≈ 0.33"
+    #             else:
+    #                 final_display_text = f"{equation} = {clean_result}"  # e.g., "5+5 = 10"
+    #
+    #     # --- 4c. Solver or Calculation Result (Show Equation = OFF) ---
+    #     elif show_equation_setting == False:
+    #         is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
+    #         if is_solver_result:
+    #             final_display_text = f"{equation} | {math_engine_output}"  # Still show equation for solver
+    #         else:
+    #             clean_result = math_engine_output
+    #             # Just show the result
+    #             if math_engine_output.startswith("\u2248"):
+    #                 final_display_text = f"{clean_result}"  # e.g., "≈ 0.33"
+    #             else:
+    #                 final_display_text = f"{clean_result}"  # e.g., "10"
+    #     else:
+    #         final_display_text = math_engine_output  # Fallback
+    #
+    #
+    #     # --- 5. Update Display and Undo Stack ---
+    #     self.display.setText(final_display_text)
+    #
+    #     # Add the result to the undo stack
+    #     if final_display_text != self.undo[-1]:
+    #         self.undo.append('⏎')  # Add a "marker" to show this was a calculation
+    #         self.undo.append(final_display_text)
+    #         self.redo.clear()  # Clear redo stack
+    #
+    #     self.update_font_size_display()
+    #
+    #     print("undo: " + str(self.undo))
+    #     print("redo: " + str(self.redo))
+    #     self.previous_equation = equation  # Remember this equation
+
+    def Calc_result(self, ergebnis, equation, mode):
+        # Mode:
+        # 1. Variable and Rounding
+        # 2. Varbiable and no Rounding
+        # 3. No Variable but rounding
+        # 4. No Variable, No rounding
         self.received_result = True
         self.thread_active = False  # Thread is no longer active
 
-        if equation.endswith('=') and self.setting_value_list["show_equation"] == True:
-            # New: store the equation (without trailing '=') for subsequent UI features
-            self.equation = equation[:-1]
-
-        print(ergebnis)  # Log the raw result
-        self.update_return_button()  # Change "X" back to "⏎"
-
-        # --- 2. Handle MathError Object ---
-        # If the worker sent back a MathError object...
+        self.update_return_button()
         if isinstance(ergebnis, E.MathError):
             error_obj = ergebnis
-
-            # --- 2a. Build Error Dialog ---
             error_box = QtWidgets.QMessageBox(self)
             error_code = error_obj.code
             additional_info = f"Details: {error_obj.message}\nEquation: {error_obj.equation}"
@@ -936,61 +883,62 @@ class CalculatorPrototype(QtWidgets.QWidget):
             error_box.setStandardButtons(QtWidgets.QMessageBox.Ok)
             error_box.setStyleSheet(self.get_message_box_stylesheet())
             error_box.exec()
-
-            # --- 2b. Reset Display ---
-            # Show the original (failed) equation
             self.display.setText(equation)
             self.update_font_size_display()
-            return  # Stop here
+            return
 
-        # --- 3. Handle Successful Result (String) ---
         math_engine_output = ergebnis.strip()
-        final_display_text = ""
+        self.ans = math_engine_output
+        self.calculator_result = math_engine_output
 
         show_equation_setting = self.setting_value_list["show_equation"]
+        ungefaehr_zeichen = "\u2248"  # "≈"
 
-        # --- 4. Result Formatting Logic ---
-        # This block decides *how* to show the result
+        if not show_equation_setting:
+            # Fall 0: Wenn 'show_equation_setting' FALSE ist, zeigen wir NUR das Ergebnis.
+            # Der Modus ist in diesem Fall für die Anzeige irrelevant.
+            if mode == 1:
+                final_display_text = f"x {ungefaehr_zeichen} {math_engine_output}"
+            elif mode == 2:
+                final_display_text = f"x = {math_engine_output}"
+            elif mode == 3:
+                final_display_text = f"{ungefaehr_zeichen} {math_engine_output}"
+            elif mode == 4:
+                final_display_text = f"= {math_engine_output}"
 
-        # --- 4a. Boolean Result (e.g., "5=5") ---
-        if (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == True:
-            math_engine_output = math_engine_output[math_engine_output.index("=") + 1:]
-            final_display_text = f"{equation} | {math_engine_output}"
-        elif (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == False:
-            math_engine_output = math_engine_output[math_engine_output.index("=") + 1:]
-            final_display_text = f"{math_engine_output}"
 
-        # --- 4b. Solver or Calculation Result (Show Equation = ON) ---
         elif show_equation_setting == True:
-            is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
-            if is_solver_result:
-                final_display_text = f"{equation} | {math_engine_output}"  # e.g., "5x=10 | x = 2"
-            else:
-                clean_result = math_engine_output
-                # Strip the prefix (= or ≈) from the engine output
-                if clean_result.startswith("=") or clean_result.startswith("\u2248"):
-                    clean_result = clean_result[1:].strip()
+            # Fall 1: Variable UND Rundung (e.g., Solver-Ergebnis mit ≈)
+            if mode == 1:
+                # Variable und Rundung. Gehen wir von einer Solver-Ausgabe aus (z.B. "x ≈ 1.23").
+                # Zeige die Gleichung, gefolgt von der Lösung (Solver trennt man oft mit |).
+                final_display_text = f"{equation} | x {ungefaehr_zeichen} {math_engine_output}"
 
-                # Re-add the correct prefix *after* the equation
-                if math_engine_output.startswith("\u2248"):
-                    final_display_text = f"{equation} {math_engine_output}"  # e.g., "1/3 ≈ 0.33"
-                else:
-                    final_display_text = f"{equation} = {clean_result}"  # e.g., "5+5 = 10"
+            # Fall 2: Variable und KEINE Rundung (e.g., Solver-Ergebnis mit =)
+            elif mode == 2:
+                # Variable und keine Rundung. Gehen wir von einer Solver-Ausgabe aus (z.B. "x = 2").
+                final_display_text = f"{equation} | x = {math_engine_output}"
 
-        # --- 4c. Solver or Calculation Result (Show Equation = OFF) ---
-        elif show_equation_setting == False:
-            is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
-            if is_solver_result:
-                final_display_text = f"{equation} | {math_engine_output}"  # Still show equation for solver
-            else:
-                clean_result = math_engine_output
-                # Just show the result
-                if math_engine_output.startswith("\u2248"):
-                    final_display_text = f"{clean_result}"  # e.g., "≈ 0.33"
-                else:
-                    final_display_text = f"{clean_result}"  # e.g., "10"
+            # Fall 3: KEINE Variable, ABER Rundung (e.g., "sqrt(2) ≈ 1.414...")
+            elif mode == 3:
+                # Keine Variable, aber Rundung. Die MathEngine hat ein ≈ geliefert.
+                final_display_text = f"{equation} {ungefaehr_zeichen} {math_engine_output}"
+
+            # Fall 4: KEINE Variable, KEINE Rundung (e.g., "5+5 = 10")
+            elif mode == 4 and not "=" in equation:
+                # Keine Variable, keine Rundung. Die MathEngine hat ein = geliefert.
+                final_display_text = f"{equation} = {math_engine_output}"
+
+            elif mode == 4 and "=" in equation:
+                # Keine Variable, keine Rundung. Die MathEngine hat ein = geliefert.
+                final_display_text = f"{equation} | {math_engine_output}"
         else:
-            final_display_text = math_engine_output  # Fallback
+            # Fallback, sollte niemals eintreten
+            final_display_text = math_engine_output
+
+
+
+
 
         # --- 5. Update Display and Undo Stack ---
         self.display.setText(final_display_text)
@@ -1006,8 +954,6 @@ class CalculatorPrototype(QtWidgets.QWidget):
         print("undo: " + str(self.undo))
         print("redo: " + str(self.redo))
         self.previous_equation = equation  # Remember this equation
-
-
 def main():
     # --- Main Application Entry Point ---
     app = QtWidgets.QApplication()

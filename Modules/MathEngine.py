@@ -764,7 +764,7 @@ def calculate(problem):
             left_val = finaler_baum.left.evaluate()
             right_val = finaler_baum.right.evaluate()
             ausgabe_string = "True" if left_val == right_val else "False"
-            return f"= {ausgabe_string}"
+            return ausgabe_string, 4
 
         else:
             # Mixed/invalid states with or without '=' and variables
@@ -777,8 +777,6 @@ def calculate(problem):
                 raise E.SolverError("One of the sides is empty: " + str(problem), code = "3022")
             else:
                 raise E.CalculationError("The calculator was called on an equation.", code="3015")
-
-            return  # Unreachable, kept for clarity
 
         # Render result based on settings (fractions/decimals, rounding flag)
         ergebnis, rounding = cleanup(ergebnis)
@@ -796,14 +794,18 @@ def calculate(problem):
             ausgabe_string = str(ergebnis)
 
         # Final display formatting
+        # 1. Variable and Rounding
+        # 2. Varbiable and no Rounding
+        # 3. No Variable but rounding
+        # 4. No Variable, No rounding
         if cas == True and rounding == True:
-            return (f"x {ungefaehr_zeichen} " + ausgabe_string)
+            return ((ausgabe_string), 1)
         elif cas == True and rounding == False:
-            return ("x = " + ausgabe_string)
+            return ((ausgabe_string), 2)
         elif rounding == True and not cas:
-            return (f"{ungefaehr_zeichen} " + ausgabe_string)
+            return ((ausgabe_string), 3)
         else:
-            return ("= " + ausgabe_string)
+            return ((ausgabe_string), 4)
 
     # Known numeric overflow
     except Overflow as e:

@@ -119,6 +119,7 @@ ERROR_MESSAGES = {
     "4700": "Process already running",
     "4501": "Not all Settings could be saved: ", # + failing setting
     "4002": "Calculation already Running!",
+    "4003": "No Value in ANS",
 
     # 9xxx — catch-all
     "9999": "Unexpected Error: ",                # + error
