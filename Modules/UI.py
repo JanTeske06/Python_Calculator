@@ -558,6 +558,52 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 # Normal redo (appends 1 item)
                 self.undo.append(self.redo.pop())
                 self.display_text = self.undo[-1]
+        elif value == '📋' or value == '📑':
+            # New: single handler for clipboard button.
+            # - If Shift is held, interpret as Copy (📋) and copy current display.
+            # - Otherwise, interpret as Paste (📑) and insert clipboard text.
+            if self.shift_is_held:
+                pyperclip.copy(self.display.text())
+            else:
+                clipboard = QtWidgets.QApplication.clipboard()
+                clipboard_text = clipboard.text()
+
+                # Clean solver/boolean decorations before pasting new content
+                if "x" in self.current_text or ("True" or "False") in self.current_text:
+                    if "|" in self.current_text:
+                        print(str(get_line_number()))
+                        self.current_text = self.current_text[:self.current_text.index("|") - 1]
+
+                if clipboard_text:
+                    # Replace "0" or append to existing input
+                    if self.current_text == "0":
+                        self.current_text = clipboard_text
+                    else:
+                        self.current_text = self.current_text + clipboard_text
+
+                    self.display.setText(self.current_text)
+                    self.undo.append(self.current_text)
+                    self.redo.clear()
+
+                    # Optional auto-enter after paste (configurable)
+                    response = self.setting_value_list["after_paste_enter"]
+                    if response == False:
+                        self.update_font_size_display()
+                        pass
+                    elif response == True:
+                        if self.thread_active:
+                            print("ERROR: A calculation is already running!")  # 4002
+                            return
+                        else:
+                            self.thread_active = True
+                            self.update_return_button()
+                            self.display.setText("...")
+                            worker_instanz = Worker(self.current_text)
+                            mein_thread = threading.Thread(target=worker_instanz.run_Calc)
+                            mein_thread.start()
+                            worker_instanz.job_finished.connect(self.Calc_result)
+            self.update_font_size_display()
+            return
 
 
 
@@ -624,6 +670,8 @@ class CalculatorPrototype(QtWidgets.QWidget):
             self.redo.clear()
 
         self.display.setText(self.display_text)
+
+        self.update_font_size_display()
 
 
 
@@ -752,113 +800,9 @@ class CalculatorPrototype(QtWidgets.QWidget):
         else:
             return ""  # Use default stylesheet in light mode
 
-    # def Calc_result(self, ergebnis, equation, mode):
-    #     # Mode:
-    #     # 1. Variable and Rounding
-    #     # 2. Varbiable and no Rounding
-    #     # 3. No Variable but rounding
-    #     # 4. No Variable, No rounding
-    #
-    #     # --- 1. Handle Calculation Result ---
-    #     # This function is called by the Worker's "job_finished" signal
-    #     self.received_result = True
-    #     self.thread_active = False  # Thread is no longer active
-    #
-    #
-    #
-    #     self.update_return_button()  # Change "X" back to "⏎"
-    #
-    #     # --- 2. Handle MathError Object ---
-    #     # If the worker sent back a MathError object...
-    #     if isinstance(ergebnis, E.MathError):
-    #         error_obj = ergebnis
-    #
-    #         # --- 2a. Build Error Dialog ---
-    #         error_box = QtWidgets.QMessageBox(self)
-    #         error_code = error_obj.code
-    #         additional_info = f"Details: {error_obj.message}\nEquation: {error_obj.equation}"
-    #
-    #         error_box.setIcon(QtWidgets.QMessageBox.Critical)
-    #         error_box.setWindowTitle("Calculation error")
-    #         error_box.setText(f"Error {error_code}: {E.ERROR_MESSAGES.get(error_code, 'Unknown error')}")
-    #         error_box.setInformativeText(additional_info)
-    #         error_box.setStandardButtons(QtWidgets.QMessageBox.Ok)
-    #         error_box.setStyleSheet(self.get_message_box_stylesheet())
-    #         error_box.exec()
-    #
-    #         # --- 2b. Reset Display ---
-    #         # Show the original (failed) equation
-    #         self.display.setText(equation)
-    #         self.update_font_size_display()
-    #         return  # Stop here
-    #
-    #     # --- 3. Handle Successful Result (String) ---
-    #     math_engine_output = ergebnis.strip()
-    #     self.ans = math_engine_output
-    #
-    #     show_equation_setting = self.setting_value_list["show_equation"]
-    #
-    #     # --- 4. Result Formatting Logic ---
-    #     # This block decides *how* to show the result
-    #
-    #     # --- 4a. Boolean Result (e.g., "5=5") ---
-    #
-    #
-    #
-    #     if (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == True:
-    #         math_engine_output = math_engine_output[math_engine_output.index("=") + 1:]
-    #         final_display_text = f"{equation} | {math_engine_output}"
-    #     elif (math_engine_output == "= True" or math_engine_output == "= False") and show_equation_setting == False:
-    #         math_engine_output = math_engine_output[math_engine_output.index("=") + 1:]
-    #         final_display_text = f"{math_engine_output}"
-    #
-    #     # --- 4b. Solver or Calculation Result (Show Equation = ON) ---
-    #     elif show_equation_setting == True:
-    #         is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
-    #         if is_solver_result:
-    #             final_display_text = f"{equation} | {math_engine_output}"  # e.g., "5x=10 | x = 2"
-    #         else:
-    #             clean_result = math_engine_output
-    #             # Strip the prefix (= or ≈) from the engine output
-    #             if clean_result.startswith("=") or clean_result.startswith("\u2248"):
-    #                 clean_result = clean_result[1:].strip()
-    #
-    #             # Re-add the correct prefix *after* the equation
-    #             if math_engine_output.startswith("\u2248"):
-    #                 final_display_text = f"{equation} {math_engine_output}"  # e.g., "1/3 ≈ 0.33"
-    #             else:
-    #                 final_display_text = f"{equation} = {clean_result}"  # e.g., "5+5 = 10"
-    #
-    #     # --- 4c. Solver or Calculation Result (Show Equation = OFF) ---
-    #     elif show_equation_setting == False:
-    #         is_solver_result = math_engine_output.startswith("x =") or math_engine_output.startswith("x \u2248")
-    #         if is_solver_result:
-    #             final_display_text = f"{equation} | {math_engine_output}"  # Still show equation for solver
-    #         else:
-    #             clean_result = math_engine_output
-    #             # Just show the result
-    #             if math_engine_output.startswith("\u2248"):
-    #                 final_display_text = f"{clean_result}"  # e.g., "≈ 0.33"
-    #             else:
-    #                 final_display_text = f"{clean_result}"  # e.g., "10"
-    #     else:
-    #         final_display_text = math_engine_output  # Fallback
-    #
-    #
-    #     # --- 5. Update Display and Undo Stack ---
-    #     self.display.setText(final_display_text)
-    #
-    #     # Add the result to the undo stack
-    #     if final_display_text != self.undo[-1]:
-    #         self.undo.append('⏎')  # Add a "marker" to show this was a calculation
-    #         self.undo.append(final_display_text)
-    #         self.redo.clear()  # Clear redo stack
-    #
-    #     self.update_font_size_display()
-    #
-    #     print("undo: " + str(self.undo))
-    #     print("redo: " + str(self.redo))
-    #     self.previous_equation = equation  # Remember this equation
+
+
+
 
     def Calc_result(self, ergebnis, equation, mode):
         # Mode:
