@@ -87,8 +87,8 @@ def is_shift_pressed():
 
     """""
 
-    tastatur_controller = Controller()
-    return tastatur_controller.shift_pressed
+    keyboard_controller = Controller()
+    return keyboard_controller.shift_pressed
 
 
 class Worker(QObject):
@@ -273,9 +273,9 @@ class SettingsDialog(QtWidgets.QDialog):
 
             # --- 6. Write to File ---
             # If all validations passed, save the updated dictionary to config.json
-            gespeicherte_settings = config_manager.save_setting(setting_value_list)
+            saved_settings = config_manager.save_setting(setting_value_list)
 
-            if gespeicherte_settings != {}:
+            if saved_settings != {}:
                 self.settings_saved.emit()  # Tell the main window to update
                 self.accept()  # Close the settings dialog
                 self.update_darkmode()  # Apply theme changes
@@ -598,10 +598,10 @@ class CalculatorPrototype(QtWidgets.QWidget):
                             self.thread_active = True
                             self.update_return_button()
                             self.display.setText("...")
-                            worker_instanz = Worker(self.current_text)
-                            mein_thread = threading.Thread(target=worker_instanz.run_Calc)
-                            mein_thread.start()
-                            worker_instanz.job_finished.connect(self.Calc_result)
+                            worker_instance = Worker(self.current_text)
+                            my_thread = threading.Thread(target=worker_instance.run_Calc)
+                            my_thread.start()
+                            worker_instance.job_finished.connect(self.Calc_result)
             self.update_font_size_display()
             return
 
@@ -630,12 +630,12 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
 
             # --- Start Thread ---
-            worker_instanz = Worker(self.display_text)
-            mein_thread = threading.Thread(target=worker_instanz.run_Calc)
-            mein_thread.start()
+            worker_instance = Worker(self.display_text)
+            my_thread = threading.Thread(target=worker_instance.run_Calc)
+            my_thread.start()
 
             # Connect the worker's "finished" signal to our result handler
-            worker_instanz.job_finished.connect(self.Calc_result)
+            worker_instance.job_finished.connect(self.Calc_result)
             return  # IMPORTANT: Stop function here. Result will arrive via signal.
 
         else:
@@ -685,39 +685,39 @@ class CalculatorPrototype(QtWidgets.QWidget):
         self.display.setText(self.current_text)
 
         font = self.display.font()
-        aktuelle_groesse = font.pointSize()
+        current_size = font.pointSize()
         fm = QtGui.QFontMetrics(font)
 
         # Calculate available width inside the QLineEdit
         r_margin = self.display.textMargins().right()
         l_margin = self.display.textMargins().left()
         padding = l_margin + r_margin + 5
-        verfuegbare_breite = self.display.width() - padding
+        available_width = self.display.width() - padding
 
-        text_breite = fm.horizontalAdvance(self.current_text)
+        text_width = fm.horizontalAdvance(self.current_text)
 
         # --- Shrink font if too big ---
-        while text_breite > verfuegbare_breite and aktuelle_groesse >= MIN_FONT_SIZE:
-            aktuelle_groesse -= 0.01
-            font.setPointSize(aktuelle_groesse)
+        while text_width > available_width and current_size >= MIN_FONT_SIZE:
+            current_size -= 0.01
+            font.setPointSize(current_size)
             fm = QtGui.QFontMetrics(font)
-            text_breite = fm.horizontalAdvance(self.current_text)
+            text_width = fm.horizontalAdvance(self.current_text)
 
         # --- Grow font if too small ---
-        temp_size = aktuelle_groesse
+        temp_size = current_size
         while temp_size <= MAX_FONT_SIZE:
             temp_size += 0.01
             font.setPointSize(temp_size)
             fm_temp = QtGui.QFontMetrics(font)
-            text_breite_temp = fm_temp.horizontalAdvance(self.current_text)
-            if text_breite_temp <= verfuegbare_breite:
-                aktuelle_groesse = temp_size  # This font size fits
+            text_width_temp = fm_temp.horizontalAdvance(self.current_text)
+            if text_width_temp <= available_width:
+                current_size = temp_size  # This font size fits
             else:
                 temp_size -= 0.01  # The last one was too big
                 break
 
         # Apply the final calculated font size
-        font.setPointSize(aktuelle_groesse)
+        font.setPointSize(current_size)
         self.display.setFont(font)
 
     def update_return_button(self):
@@ -804,7 +804,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
 
 
 
-    def Calc_result(self, ergebnis, equation, mode):
+    def Calc_result(self, result, equation, mode):
         # Mode:
         # 1. Variable and Rounding
         # 2. Varbiable and no Rounding
@@ -814,8 +814,8 @@ class CalculatorPrototype(QtWidgets.QWidget):
         self.thread_active = False  # Thread is no longer active
 
         self.update_return_button()
-        if isinstance(ergebnis, E.MathError):
-            error_obj = ergebnis
+        if isinstance(result, E.MathError):
+            error_obj = result
             error_box = QtWidgets.QMessageBox(self)
             error_code = error_obj.code
             additional_info = f"Details: {error_obj.message}\nEquation: {error_obj.equation}"
@@ -831,22 +831,22 @@ class CalculatorPrototype(QtWidgets.QWidget):
             self.update_font_size_display()
             return
 
-        math_engine_output = ergebnis.strip()
+        math_engine_output = result.strip()
         self.ans = math_engine_output
         self.calculator_result = math_engine_output
 
         show_equation_setting = self.setting_value_list["show_equation"]
-        ungefaehr_zeichen = "\u2248"  # "≈"
+        approx_sign = "\u2248"  # "≈"
 
         if not show_equation_setting:
             # Fall 0: Wenn 'show_equation_setting' FALSE ist, zeigen wir NUR das Ergebnis.
             # Der Modus ist in diesem Fall für die Anzeige irrelevant.
             if mode == 1:
-                final_display_text = f"x {ungefaehr_zeichen} {math_engine_output}"
+                final_display_text = f"x {approx_sign} {math_engine_output}"
             elif mode == 2:
                 final_display_text = f"x = {math_engine_output}"
             elif mode == 3:
-                final_display_text = f"{ungefaehr_zeichen} {math_engine_output}"
+                final_display_text = f"{approx_sign} {math_engine_output}"
             elif mode == 4:
                 final_display_text = f"= {math_engine_output}"
 
@@ -856,7 +856,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
             if mode == 1:
                 # Variable und Rundung. Gehen wir von einer Solver-Ausgabe aus (z.B. "x ≈ 1.23").
                 # Zeige die Gleichung, gefolgt von der Lösung (Solver trennt man oft mit |).
-                final_display_text = f"{equation} | x {ungefaehr_zeichen} {math_engine_output}"
+                final_display_text = f"{equation} | x {approx_sign} {math_engine_output}"
 
             # Fall 2: Variable und KEINE Rundung (e.g., Solver-Ergebnis mit =)
             elif mode == 2:
@@ -866,7 +866,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
             # Fall 3: KEINE Variable, ABER Rundung (e.g., "sqrt(2) ≈ 1.414...")
             elif mode == 3:
                 # Keine Variable, aber Rundung. Die MathEngine hat ein ≈ geliefert.
-                final_display_text = f"{equation} {ungefaehr_zeichen} {math_engine_output}"
+                final_display_text = f"{equation} {approx_sign} {math_engine_output}"
 
             # Fall 4: KEINE Variable, KEINE Rundung (e.g., "5+5 = 10")
             elif mode == 4 and not "=" in equation:
