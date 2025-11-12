@@ -577,12 +577,12 @@ class CalculatorPrototype(QtWidgets.QWidget):
                 if clipboard_text:
                     # Replace "0" or append to existing input
                     if self.current_text == "0":
-                        self.current_text = clipboard_text
+                        self.display_text = clipboard_text
                     else:
-                        self.current_text = self.current_text + clipboard_text
+                        self.display_text = self.display_text + clipboard_text
 
-                    self.display.setText(self.current_text)
-                    self.undo.append(self.current_text)
+                    self.display.setText(self.display_text)
+                    self.undo.append(self.display_text)
                     self.redo.clear()
 
                     # Optional auto-enter after paste (configurable)
@@ -598,7 +598,7 @@ class CalculatorPrototype(QtWidgets.QWidget):
                             self.thread_active = True
                             self.update_return_button()
                             self.display.setText("...")
-                            worker_instance = Worker(self.current_text)
+                            worker_instance = Worker(self.display_text)
                             my_thread = threading.Thread(target=worker_instance.run_Calc)
                             my_thread.start()
                             worker_instance.job_finished.connect(self.Calc_result)
