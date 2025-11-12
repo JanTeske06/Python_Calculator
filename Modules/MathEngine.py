@@ -272,23 +272,55 @@ def translator(problem):
     while b < len(problem):
         current_char = problem[b]
 
-        # --- Numbers: digits and decimal separator ---
+        # --- Numbers: digits and decimal separator (EXPONENTIAL NOTATION SUPPORT ADDED) ---
         if isInt(current_char) or (b >= 0 and current_char == "."):
             str_number = current_char
             has_decimal_point = False  # Only one dot allowed in a numeric literal
+            has_exponent_e = False  # Only one 'e' or 'E' allowed
 
-            while (b + 1 < len(problem)) and (isInt(problem[b + 1]) or problem[b + 1] == "."):
-                if problem[b + 1] == ".":
+            # Continue reading the number part
+            while (b + 1 < len(problem)):
+                next_char = problem[b + 1]
+
+                # 1. Handle decimal points
+                if next_char == ".":
                     if has_decimal_point:
-                        raise E.SyntaxError("Double comma sign.", code="3008")
+                        raise E.SyntaxError("Double decimal point.", code="3008")
                     has_decimal_point = True
 
+                # 2. Handle the 'E' or 'e' for exponent
+                elif next_char in ('e', 'E'):
+                    if has_exponent_e:
+                        # Cannot have two 'e's in a single number
+                        raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031")
+                    has_exponent_e = True
+
+                # 3. Handle the sign (+ or -) immediately following 'E'/'e'
+                elif next_char in ('+', '-'):
+                    # The sign is only valid if it immediately follows 'e' or 'E'
+                    if not (problem[b] in ('e', 'E') and has_exponent_e):
+                        # If it's not following 'e'/'E', it's a separate unary operator.
+                        # Break the loop to treat it as an operator in the next iteration.
+                        break
+
+                # 4. End the loop if the next character is not a number component
+                elif not isInt(next_char):
+                    break
+
+                # If we made it here, the character is a valid part of the number (digit, dot, E/e, or sign after E/e)
                 b += 1
                 str_number += problem[b]
 
-            # Store as Decimal to keep high precision downstream
+            # Validate the final collected string
             if isfloat(str_number) or isInt(str_number):
                 full_problem.append(Decimal(str_number))
+            else:
+                # This handles cases like '5E' without an exponent after it
+                if has_exponent_e and not str_number[-1].isdigit():
+                    raise E.SyntaxError("Missing exponent value after 'E'/'e'.", code="3032")
+                # If it's not a valid number, let the fallback handle it as a variable
+                # or raise an error in the original logic. We rely on the 'else' below.
+
 
         # --- Operators ---
         elif isOp(current_char) != -1:
